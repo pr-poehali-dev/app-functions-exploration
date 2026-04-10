@@ -47,7 +47,7 @@ def get_user_by_token(token, conn):
     }
 
 def handler(event, context):
-    """Регистрация, авторизация и профиль пользователей аукциона подрядов"""
+    """Регистрация, авторизация, профиль и админ-управление пользователями"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors_headers(), 'body': ''}
 
@@ -224,4 +224,118 @@ def handler(event, context):
             conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите параметр action: register, login, me, profile, logout'})}
+    # GET ?action=admin_users
+    if method == 'GET' and action == 'admin_users':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        cur = conn.cursor()
+        where = []
+        role_filter = params.get('role', 'all')
+        if role_filter and role_filter != 'all':
+            where.append("role = '%s'" % role_filter.replace("'", "''"))
+        search = params.get('search', '').strip()
+        if search:
+            s = search.replace("'", "''")
+            where.append("(full_name ILIKE '%%%s%%' OR email ILIKE '%%%s%%' OR phone ILIKE '%%%s%%' OR company_name ILIKE '%%%s%%')" % (s, s, s, s))
+        blocked = params.get('blocked')
+        if blocked == 'true':
+            where.append("is_blocked = TRUE")
+        elif blocked == 'false':
+            where.append("is_blocked = FALSE")
+
+        where_str = " WHERE " + " AND ".join(where) if where else ""
+        cur.execute("SELECT COUNT(*) FROM users" + where_str)
+        total = cur.fetchone()[0]
+
+        page_num = max(1, int(params.get('page', 1)))
+        per_page = min(50, int(params.get('per_page', 20)))
+        offset = (page_num - 1) * per_page
+
+        cur.execute(
+            "SELECT id, email, phone, role, full_name, company_name, city, region, "
+            "entity_type, inn, is_verified, is_blocked, created_at, "
+            "rating, reviews_count, deals_count, experience_years "
+            "FROM users" + where_str + " ORDER BY created_at DESC LIMIT %d OFFSET %d" % (per_page, offset)
+        )
+        users = []
+        for r in cur.fetchall():
+            users.append({
+                'id': r[0], 'email': r[1], 'phone': r[2], 'role': r[3],
+                'full_name': r[4], 'company_name': r[5], 'city': r[6], 'region': r[7],
+                'entity_type': r[8], 'inn': r[9], 'is_verified': r[10], 'is_blocked': r[11],
+                'created_at': r[12].isoformat() if r[12] else None,
+                'rating': float(r[13]) if r[13] else 0, 'reviews_count': r[14],
+                'deals_count': r[15], 'experience_years': r[16]
+            })
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'users': users, 'total': total, 'page': page_num, 'per_page': per_page
+        })}
+
+    # POST ?action=block_user
+    if method == 'POST' and action == 'block_user':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        user_id = body.get('user_id')
+        block = body.get('block', True)
+        if not user_id:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите user_id'})}
+        if int(user_id) == admin['id']:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Нельзя заблокировать себя'})}
+
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET is_blocked = %s, updated_at = NOW() WHERE id = %d" % (str(block).upper(), int(user_id)))
+        if block:
+            cur.execute("DELETE FROM sessions WHERE user_id = %d" % int(user_id))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    # POST ?action=change_role
+    if method == 'POST' and action == 'change_role':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        user_id = body.get('user_id')
+        new_role = body.get('role')
+        if not user_id or not new_role:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите user_id и role'})}
+        if new_role not in ('customer', 'contractor', 'admin'):
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Роль: customer, contractor или admin'})}
+
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET role = '%s', updated_at = NOW() WHERE id = %d" % (new_role, int(user_id)))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: register, login, me, profile, logout, admin_users, block_user, change_role'})}

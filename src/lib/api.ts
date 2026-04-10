@@ -66,6 +66,9 @@ export const api = {
     },
     approve: (body: { id: number; action: string; reason?: string }) =>
       request(`${LOTS_URL}?action=approve`, { method: "POST", body: JSON.stringify(body) }),
+    adminCategory: (body: JsonValue) =>
+      request(`${LOTS_URL}?action=admin_category`, { method: "POST", body: JSON.stringify(body) }),
+    adminStats: () => request(`${LOTS_URL}?action=admin_stats`),
   },
   bids: {
     place: (body: { lot_id: number; amount: number; comment?: string }) =>
@@ -76,6 +79,28 @@ export const api = {
       request(`${BIDS_URL}?action=select_winner`, { method: "POST", body: JSON.stringify(body) }),
     rejectAll: (body: { lot_id: number; reason?: string }) =>
       request(`${BIDS_URL}?action=reject_all`, { method: "POST", body: JSON.stringify(body) }),
+    adminList: (params: Record<string, string | number | undefined> = {}) => {
+      const q = new URLSearchParams({ action: "admin_bids" });
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== "" && v !== null) q.append(k, String(v));
+      });
+      return request(`${BIDS_URL}?${q.toString()}`);
+    },
+    cancelBid: (bid_id: number) =>
+      request(`${BIDS_URL}?action=cancel_bid`, { method: "POST", body: JSON.stringify({ bid_id }) }),
+  },
+  admin: {
+    users: (params: Record<string, string | number | undefined> = {}) => {
+      const q = new URLSearchParams({ action: "admin_users" });
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== "" && v !== null) q.append(k, String(v));
+      });
+      return request(`${AUTH_URL}?${q.toString()}`);
+    },
+    blockUser: (user_id: number, block: boolean) =>
+      request(`${AUTH_URL}?action=block_user`, { method: "POST", body: JSON.stringify({ user_id, block }) }),
+    changeRole: (user_id: number, role: string) =>
+      request(`${AUTH_URL}?action=change_role`, { method: "POST", body: JSON.stringify({ user_id, role }) }),
   },
   notifications: {
     list: () => request(`${NOTIF_URL}?action=list`),

@@ -302,5 +302,89 @@ def handler(event, context):
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
+    # GET ?action=admin_bids
+    if method == 'GET' and action == 'admin_bids':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        cur = conn.cursor()
+        lot_id = params.get('lot_id')
+        where = []
+        if lot_id:
+            where.append("b.lot_id = %d" % int(lot_id))
+        search = params.get('search', '').strip()
+        if search:
+            s = search.replace("'", "''")
+            where.append("(u.full_name ILIKE '%%%s%%' OR l.title ILIKE '%%%s%%')" % (s, s))
+        where_str = " WHERE " + " AND ".join(where) if where else ""
+
+        cur.execute("SELECT COUNT(*) FROM bids b JOIN users u ON b.contractor_id = u.id JOIN lots l ON b.lot_id = l.id" + where_str)
+        total = cur.fetchone()[0]
+
+        page_num = max(1, int(params.get('page', 1)))
+        per_page = min(50, int(params.get('per_page', 20)))
+        offset = (page_num - 1) * per_page
+
+        cur.execute(
+            "SELECT b.id, b.lot_id, b.contractor_id, b.amount, b.comment, b.created_at, "
+            "b.is_withdrawn, b.is_auto, u.full_name, u.company_name, u.rating, "
+            "l.title as lot_title, l.status as lot_status "
+            "FROM bids b JOIN users u ON b.contractor_id = u.id JOIN lots l ON b.lot_id = l.id"
+            + where_str + " ORDER BY b.created_at DESC LIMIT %d OFFSET %d" % (per_page, offset)
+        )
+        bids = []
+        for r in cur.fetchall():
+            bids.append({
+                'id': r[0], 'lot_id': r[1], 'contractor_id': r[2],
+                'amount': float(r[3]), 'comment': r[4],
+                'created_at': r[5].isoformat() if r[5] else None,
+                'is_withdrawn': r[6], 'is_auto': r[7],
+                'contractor_name': r[8], 'company_name': r[9],
+                'rating': float(r[10]) if r[10] else 0,
+                'lot_title': r[11], 'lot_status': r[12]
+            })
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'bids': bids, 'total': total, 'page': page_num, 'per_page': per_page
+        })}
+
+    # POST ?action=cancel_bid
+    if method == 'POST' and action == 'cancel_bid':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        bid_id = body.get('bid_id')
+        if not bid_id:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите bid_id'})}
+
+        cur = conn.cursor()
+        cur.execute("SELECT lot_id, amount FROM bids WHERE id = %d AND is_withdrawn = FALSE" % int(bid_id))
+        bid_row = cur.fetchone()
+        if not bid_row:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Ставка не найдена'})}
+
+        cur.execute("UPDATE bids SET is_withdrawn = TRUE WHERE id = %d" % int(bid_id))
+        cur.execute("UPDATE lots SET bids_count = GREATEST(0, bids_count - 1) WHERE id = %d" % bid_row[0])
+
+        cur.execute(
+            "SELECT MIN(amount) FROM bids WHERE lot_id = %d AND is_withdrawn = FALSE" % bid_row[0]
+        )
+        new_min = cur.fetchone()[0]
+        if new_min:
+            cur.execute("UPDATE lots SET current_min_bid = %s WHERE id = %d" % (float(new_min), bid_row[0]))
+        else:
+            cur.execute("UPDATE lots SET current_min_bid = NULL WHERE id = %d" % bid_row[0])
+
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
     conn.close()
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: place, list, my, select_winner, reject_all'})}
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: place, list, my, select_winner, reject_all, admin_bids, cancel_bid'})}

@@ -369,5 +369,137 @@ def handler(event, context):
             'lots': lots, 'total': total, 'page': page_num, 'per_page': per_page
         })}
 
+    # POST ?action=admin_category
+    if method == 'POST' and action == 'admin_category':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        cat_action = body.get('cat_action', 'create')
+        cur = conn.cursor()
+
+        if cat_action == 'create':
+            name = body.get('name', '').strip()
+            if not name:
+                conn.close()
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите name'})}
+            slug = name.lower().replace(' ', '-').replace(',', '').replace('.', '')
+            sort_order = body.get('sort_order', 0)
+            cur.execute(
+                "INSERT INTO categories (name, slug, sort_order) VALUES ('%s', '%s', %d) RETURNING id"
+                % (name.replace("'", "''"), slug.replace("'", "''"), int(sort_order))
+            )
+            cat_id = cur.fetchone()[0]
+            conn.commit()
+            conn.close()
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'id': cat_id, 'ok': True})}
+
+        elif cat_action == 'update':
+            cat_id = body.get('id')
+            if not cat_id:
+                conn.close()
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id'})}
+            updates = []
+            if 'name' in body:
+                updates.append("name = '%s'" % body['name'].replace("'", "''"))
+                updates.append("slug = '%s'" % body['name'].lower().replace(' ', '-').replace(',', '').replace('.', '').replace("'", "''"))
+            if 'sort_order' in body:
+                updates.append("sort_order = %d" % int(body['sort_order']))
+            if updates:
+                cur.execute("UPDATE categories SET %s WHERE id = %d" % (', '.join(updates), int(cat_id)))
+                conn.commit()
+            conn.close()
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+        elif cat_action == 'delete':
+            cat_id = body.get('id')
+            if not cat_id:
+                conn.close()
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id'})}
+            cur.execute("UPDATE lots SET category_id = NULL WHERE category_id = %d" % int(cat_id))
+            cur.execute("DELETE FROM categories WHERE id = %d" % int(cat_id))
+            conn.commit()
+            conn.close()
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+        conn.close()
+        return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'cat_action: create, update, delete'})}
+
+    # GET ?action=admin_stats
+    if method == 'GET' and action == 'admin_stats':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM users")
+        total_users = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'customer'")
+        total_customers = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'contractor'")
+        total_contractors = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '7 days'")
+        new_users_week = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM lots")
+        total_lots = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM lots WHERE status = 'active'")
+        active_lots = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM lots WHERE status = 'moderation'")
+        moderation_lots = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM lots WHERE status = 'completed'")
+        completed_lots = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM lots WHERE created_at > NOW() - INTERVAL '7 days'")
+        new_lots_week = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM bids")
+        total_bids = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM bids WHERE created_at > NOW() - INTERVAL '7 days'")
+        new_bids_week = cur.fetchone()[0]
+
+        cur.execute("SELECT COALESCE(AVG(start_price), 0) FROM lots WHERE status IN ('active', 'completed')")
+        avg_price = float(cur.fetchone()[0])
+        cur.execute("SELECT COALESCE(AVG(bids_count), 0) FROM lots WHERE bids_count > 0")
+        avg_bids = float(cur.fetchone()[0])
+        cur.execute("SELECT COALESCE(SUM(views_count), 0) FROM lots")
+        total_views = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT DATE(created_at) as d, COUNT(*) FROM lots "
+            "WHERE created_at > NOW() - INTERVAL '30 days' "
+            "GROUP BY d ORDER BY d"
+        )
+        lots_by_day = [{'date': r[0].isoformat(), 'count': r[1]} for r in cur.fetchall()]
+
+        cur.execute(
+            "SELECT DATE(created_at) as d, COUNT(*) FROM users "
+            "WHERE created_at > NOW() - INTERVAL '30 days' "
+            "GROUP BY d ORDER BY d"
+        )
+        users_by_day = [{'date': r[0].isoformat(), 'count': r[1]} for r in cur.fetchall()]
+
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'users': {
+                'total': total_users, 'customers': total_customers,
+                'contractors': total_contractors, 'new_week': new_users_week,
+                'by_day': users_by_day
+            },
+            'lots': {
+                'total': total_lots, 'active': active_lots,
+                'moderation': moderation_lots, 'completed': completed_lots,
+                'new_week': new_lots_week, 'avg_price': round(avg_price),
+                'avg_bids': round(avg_bids, 1), 'total_views': total_views,
+                'by_day': lots_by_day
+            },
+            'bids': {
+                'total': total_bids, 'new_week': new_bids_week
+            }
+        })}
+
     conn.close()
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: list, categories, get, create, update, my, approve, delete, admin_list'})}
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action'})}
