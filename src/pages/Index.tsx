@@ -1089,20 +1089,33 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
             {canBid && (
               <form onSubmit={placeBid} className="mt-5 pt-5 border-t border-border space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Ваша ставка (₽)</label>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                    За сколько вы готовы выполнить эту работу? (₽)
+                  </label>
                   <input
                     required
                     type="number"
-                    step="100"
-                    max={currentMin - lot.bid_step}
+                    step="1"
+                    min="1"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value)}
-                    placeholder={String(currentMin - lot.bid_step)}
+                    placeholder="Введите вашу цену"
                     className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50"
                   />
-                  <div className="text-[11px] text-muted-foreground mt-1">
-                    Макс: {formatPrice(currentMin - lot.bid_step)}
+                  <div className="text-[11px] text-muted-foreground mt-1.5 space-y-0.5">
+                    <div>Текущая мин. ставка: <span className="font-medium text-foreground">{formatPrice(currentMin)}</span></div>
+                    <div>Ваша цена должна быть ниже на {formatPrice(lot.bid_step)} или больше</div>
                   </div>
+                  {bidAmount && parseFloat(bidAmount) >= currentMin && (
+                    <div className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
+                      <Icon name="AlertCircle" size={11} /> Цена должна быть ниже {formatPrice(currentMin)}
+                    </div>
+                  )}
+                  {bidAmount && parseFloat(bidAmount) > 0 && parseFloat(bidAmount) < currentMin && (
+                    <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                      <Icon name="Check" size={11} /> Снижение на {Math.round((1 - parseFloat(bidAmount) / lot.start_price) * 100)}% от начальной цены
+                    </div>
+                  )}
                 </div>
                 <textarea
                   rows={2}
@@ -1113,10 +1126,10 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
                 />
                 <button
                   type="submit"
-                  disabled={placing}
+                  disabled={placing || !bidAmount || parseFloat(bidAmount) >= currentMin}
                   className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  {placing ? "Отправка..." : "Подать ставку"}
+                  {placing ? "Отправка..." : `Предложить ${bidAmount ? formatPrice(parseFloat(bidAmount)) : "свою цену"}`}
                 </button>
               </form>
             )}
