@@ -6,6 +6,7 @@ import { Page, User, Notification } from "./auction/types";
 import { AuthPage, ProfilePage } from "./auction/AuthProfilePages";
 import { HomePage, LotsPage, LotDetailPage, MyLotsPage, MyBidsPage } from "./auction/LotPages";
 import { FAQPage, ContactsPage } from "./auction/StaticPages";
+import { AdminPage } from "./auction/AdminPage";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -70,6 +71,7 @@ const Index = () => {
     { id: "my_bids", label: "Мои ставки", icon: "Gavel", show: user?.role === "contractor" },
     { id: "profile", label: "Профиль", icon: "User", show: !!user },
     { id: "faq", label: "FAQ", icon: "HelpCircle", show: true },
+    { id: "admin", label: "Админ", icon: "Shield", show: user?.role === "admin" },
   ];
 
   return (
@@ -176,6 +178,7 @@ const Index = () => {
         {page === "auth" && <AuthPage onAuth={handleAuth} />}
         {page === "faq" && <FAQPage />}
         {page === "contacts" && <ContactsPage />}
+        {page === "admin" && user?.role === "admin" && <AdminPage onOpenLot={openLot} />}
       </main>
 
       {/* Mobile bottom nav */}

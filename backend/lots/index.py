@@ -67,7 +67,7 @@ LOT_SELECT = (
 )
 
 def handler(event, context):
-    """CRUD лотов аукциона. action: list, categories, get, create, update, my, approve"""
+    """CRUD лотов аукциона. action: list, categories, get, create, update, my, approve, delete, admin_list"""
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors_headers(), 'body': ''}
 
@@ -322,5 +322,52 @@ def handler(event, context):
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
+    if method == 'DELETE' and action == 'delete':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+        lot_id = params.get('id')
+        if not lot_id:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id'})}
+        cur = conn.cursor()
+        cur.execute("DELETE FROM bids WHERE lot_id = %d" % int(lot_id))
+        cur.execute("DELETE FROM notifications WHERE data->>'lot_id' = '%d'" % int(lot_id))
+        cur.execute("DELETE FROM lots WHERE id = %d" % int(lot_id))
+        if cur.rowcount == 0:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Лот не найден'})}
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    if method == 'GET' and action == 'admin_list':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+        cur = conn.cursor()
+        status_filter = params.get('status', 'all')
+        where = []
+        if status_filter and status_filter != 'all':
+            where.append("l.status = '%s'" % status_filter.replace("'", "''"))
+        search = params.get('search')
+        if search:
+            s = search.replace("'", "''")
+            where.append("(l.title ILIKE '%%%s%%' OR l.description ILIKE '%%%s%%')" % (s, s))
+        where_str = " WHERE " + " AND ".join(where) if where else ""
+        cur.execute("SELECT COUNT(*) FROM lots l" + where_str)
+        total = cur.fetchone()[0]
+        page_num = max(1, int(params.get('page', 1)))
+        per_page = min(50, int(params.get('per_page', 20)))
+        offset = (page_num - 1) * per_page
+        cur.execute(LOT_SELECT + where_str + " ORDER BY l.created_at DESC LIMIT %d OFFSET %d" % (per_page, offset))
+        lots = [lot_row_to_dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'lots': lots, 'total': total, 'page': page_num, 'per_page': per_page
+        })}
+
     conn.close()
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: list, categories, get, create, update, my, approve'})}
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: list, categories, get, create, update, my, approve, delete, admin_list'})}

@@ -1,4 +1,4 @@
-export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts";
+export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts" | "admin";
 export type Role = "customer" | "contractor" | "admin";
 
 export interface User {

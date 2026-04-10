@@ -55,6 +55,17 @@ export const api = {
       request(`${LOTS_URL}?action=update`, { method: "PUT", body: JSON.stringify(body) }),
     my: (status?: string) =>
       request(`${LOTS_URL}?action=my${status ? `&status=${status}` : ""}`),
+    delete: (id: number) =>
+      request(`${LOTS_URL}?action=delete&id=${id}`, { method: "DELETE" }),
+    adminList: (params: Record<string, string | number | undefined> = {}) => {
+      const q = new URLSearchParams({ action: "admin_list" });
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== "" && v !== null) q.append(k, String(v));
+      });
+      return request(`${LOTS_URL}?${q.toString()}`);
+    },
+    approve: (body: { id: number; action: string; reason?: string }) =>
+      request(`${LOTS_URL}?action=approve`, { method: "POST", body: JSON.stringify(body) }),
   },
   bids: {
     place: (body: { lot_id: number; amount: number; comment?: string }) =>
