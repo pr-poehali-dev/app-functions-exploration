@@ -1,0 +1,120 @@
+export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts";
+export type Role = "customer" | "contractor" | "admin";
+
+export interface User {
+  id: number;
+  email?: string;
+  phone?: string;
+  role: Role;
+  full_name: string;
+  company_name?: string;
+  city?: string;
+  region?: string;
+  rating?: number;
+  reviews_count?: number;
+  deals_count?: number;
+  is_verified?: boolean;
+  about?: string;
+  specializations?: string[];
+  experience_years?: number;
+  entity_type?: string;
+  inn?: string;
+}
+
+export interface Lot {
+  id: number;
+  customer_id: number;
+  title: string;
+  category_id?: number;
+  category_name?: string;
+  description?: string;
+  object_type?: string;
+  object_area?: number;
+  address?: string;
+  city?: string;
+  region?: string;
+  start_price: number;
+  current_min_bid?: number;
+  bid_step: number;
+  work_duration_days?: number;
+  auction_end_at: string;
+  payment_terms?: string;
+  materials_by?: string;
+  warranty_months?: number;
+  status: string;
+  bids_count: number;
+  views_count: number;
+  customer_name?: string;
+  winner_id?: number;
+  created_at: string;
+}
+
+export interface Bid {
+  id: number;
+  lot_id?: number;
+  contractor_id?: number;
+  amount: number;
+  comment?: string;
+  created_at: string;
+  contractor_name?: string;
+  company_name?: string;
+  rating?: number;
+  deals_count?: number;
+  is_verified?: boolean;
+  city?: string;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export interface Notification {
+  id: number;
+  type: string;
+  title: string;
+  message?: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ExtendedBid extends Bid {
+  about?: string;
+  specializations?: string[];
+  experience_years?: number;
+  entity_type?: string;
+  reviews_count?: number;
+}
+
+export const formatPrice = (n?: number) => {
+  if (!n) return "—";
+  return new Intl.NumberFormat("ru-RU").format(n) + " ₽";
+};
+
+export const formatDate = (d?: string) => {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+export const timeLeft = (end?: string): string => {
+  if (!end) return "—";
+  const diff = new Date(end).getTime() - Date.now();
+  if (diff <= 0) return "Завершён";
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 0) return `${days}д ${hours}ч`;
+  if (hours > 0) return `${hours}ч ${mins}м`;
+  return `${mins}м`;
+};
+
+export const statusLabel: Record<string, { label: string; cls: string }> = {
+  active: { label: "Активный", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  moderation: { label: "На модерации", cls: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
+  draft: { label: "Черновик", cls: "bg-muted text-muted-foreground border-border" },
+  completed: { label: "Завершён", cls: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
+  cancelled: { label: "Отменён", cls: "bg-red-500/15 text-red-400 border-red-500/20" },
+  in_work: { label: "В работе", cls: "bg-purple-500/15 text-purple-400 border-purple-500/20" },
+  done: { label: "Выполнен", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+};
