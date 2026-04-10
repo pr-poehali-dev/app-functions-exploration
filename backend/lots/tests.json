@@ -1,0 +1,1 @@
+{"tests": [{"name": "List active lots", "method": "GET", "path": "/?action=list", "expectedStatus": 200}, {"name": "Get categories", "method": "GET", "path": "/?action=categories", "expectedStatus": 200}, {"name": "Get lot not found", "method": "GET", "path": "/?action=get&id=999999", "expectedStatus": 404}]}

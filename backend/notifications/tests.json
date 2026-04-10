@@ -1,0 +1,1 @@
+{"tests": [{"name": "Get notifications unauthorized", "method": "GET", "path": "/?action=list", "expectedStatus": 401, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}, {"name": "Mark read unauthorized", "method": "POST", "path": "/?action=read", "body": {}, "expectedStatus": 401, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}]}

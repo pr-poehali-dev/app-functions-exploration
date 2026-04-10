@@ -1,0 +1,309 @@
+import json
+import os
+import psycopg2
+from datetime import datetime
+
+def get_db():
+    return psycopg2.connect(os.environ['DATABASE_URL'])
+
+def cors_headers():
+    return {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Authorization',
+        'Content-Type': 'application/json'
+    }
+
+def get_auth_user(event, conn):
+    auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+    token = auth.replace('Bearer ', '') if auth else ''
+    if not token:
+        return None
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT u.id, u.role, u.is_blocked FROM sessions s JOIN users u ON s.user_id = u.id "
+        "WHERE s.token = '%s' AND s.expires_at > NOW()" % token.replace("'", "''")
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {'id': row[0], 'role': row[1], 'is_blocked': row[2]}
+
+def lot_row_to_dict(row):
+    return {
+        'id': row[0], 'customer_id': row[1], 'title': row[2], 'category_id': row[3],
+        'description': row[4], 'object_type': row[5],
+        'object_area': float(row[6]) if row[6] else None,
+        'address': row[7], 'city': row[8], 'region': row[9],
+        'start_price': float(row[10]) if row[10] else 0,
+        'current_min_bid': float(row[11]) if row[11] else None,
+        'bid_step': float(row[12]) if row[12] else 1000,
+        'work_start_date': row[13].isoformat() if row[13] else None,
+        'work_end_date': row[14].isoformat() if row[14] else None,
+        'work_duration_days': row[15],
+        'auction_end_at': row[16].isoformat() if row[16] else None,
+        'payment_terms': row[17], 'materials_by': row[18],
+        'warranty_months': row[19], 'additional_conditions': row[20],
+        'attachments': row[21] or [], 'work_items': row[22] or [],
+        'status': row[23], 'views_count': row[24], 'bids_count': row[25],
+        'winner_id': row[26],
+        'created_at': row[27].isoformat() if row[27] else None,
+        'customer_name': row[28] if len(row) > 28 else None,
+        'category_name': row[29] if len(row) > 29 else None,
+    }
+
+LOT_SELECT = (
+    "SELECT l.id, l.customer_id, l.title, l.category_id, l.description, l.object_type, "
+    "l.object_area, l.address, l.city, l.region, l.start_price, l.current_min_bid, "
+    "l.bid_step, l.work_start_date, l.work_end_date, l.work_duration_days, "
+    "l.auction_end_at, l.payment_terms, l.materials_by, l.warranty_months, "
+    "l.additional_conditions, l.attachments, l.work_items, l.status, "
+    "l.views_count, l.bids_count, l.winner_id, l.created_at, "
+    "u.full_name as customer_name, c.name as category_name "
+    "FROM lots l "
+    "LEFT JOIN users u ON l.customer_id = u.id "
+    "LEFT JOIN categories c ON l.category_id = c.id "
+)
+
+def handler(event, context):
+    """CRUD лотов аукциона. action: list, categories, get, create, update, my, approve"""
+    if event.get('httpMethod') == 'OPTIONS':
+        return {'statusCode': 200, 'headers': cors_headers(), 'body': ''}
+
+    method = event.get('httpMethod', 'GET')
+    params = event.get('queryStringParameters', {}) or {}
+    action = params.get('action', 'list')
+    headers = cors_headers()
+
+    conn = get_db()
+
+    if method == 'GET' and action == 'list':
+        cur = conn.cursor()
+        where = []
+        status = params.get('status', 'active')
+        if status and status != 'all':
+            where.append("l.status = '%s'" % status.replace("'", "''"))
+        category_id = params.get('category_id')
+        if category_id:
+            where.append("l.category_id = %d" % int(category_id))
+        city = params.get('city')
+        if city:
+            where.append("l.city ILIKE '%%%s%%'" % city.replace("'", "''"))
+        search = params.get('search')
+        if search:
+            s = search.replace("'", "''")
+            where.append("(l.title ILIKE '%%%s%%' OR l.description ILIKE '%%%s%%')" % (s, s))
+        min_price = params.get('min_price')
+        if min_price:
+            where.append("l.start_price >= %s" % float(min_price))
+        max_price = params.get('max_price')
+        if max_price:
+            where.append("l.start_price <= %s" % float(max_price))
+
+        where_str = " WHERE " + " AND ".join(where) if where else ""
+        sort = params.get('sort', 'new')
+        order = "l.created_at DESC"
+        if sort == 'price_asc':
+            order = "l.start_price ASC"
+        elif sort == 'price_desc':
+            order = "l.start_price DESC"
+        elif sort == 'bids':
+            order = "l.bids_count DESC"
+        elif sort == 'ending':
+            order = "l.auction_end_at ASC"
+
+        page = max(1, int(params.get('page', 1)))
+        per_page = min(50, int(params.get('per_page', 20)))
+        offset = (page - 1) * per_page
+
+        cur.execute("SELECT COUNT(*) FROM lots l" + where_str)
+        total = cur.fetchone()[0]
+        cur.execute(LOT_SELECT + where_str + " ORDER BY " + order + " LIMIT %d OFFSET %d" % (per_page, offset))
+        lots = [lot_row_to_dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'lots': lots, 'total': total, 'page': page, 'per_page': per_page
+        })}
+
+    if method == 'GET' and action == 'categories':
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, slug, sort_order FROM categories ORDER BY sort_order")
+        cats = [{'id': r[0], 'name': r[1], 'slug': r[2]} for r in cur.fetchall()]
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'categories': cats})}
+
+    if method == 'GET' and action == 'get':
+        lot_id = params.get('id')
+        if not lot_id:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id'})}
+        cur = conn.cursor()
+        cur.execute(LOT_SELECT + " WHERE l.id = %d" % int(lot_id))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Лот не найден'})}
+        lot = lot_row_to_dict(row)
+        cur.execute("UPDATE lots SET views_count = views_count + 1 WHERE id = %d" % int(lot_id))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'lot': lot})}
+
+    if method == 'POST' and action == 'create':
+        user = get_auth_user(event, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        if user['role'] not in ('customer', 'admin'):
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Только заказчики могут создавать лоты'})}
+
+        body = json.loads(event.get('body', '{}'))
+        title = body.get('title', '').strip()
+        if not title:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите название'})}
+        start_price = body.get('start_price', 0)
+        if not start_price or float(start_price) <= 0:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите начальную стоимость'})}
+        auction_end = body.get('auction_end_at', '')
+        if not auction_end:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите дату окончания торгов'})}
+
+        status = body.get('status', 'draft')
+        if status == 'active':
+            status = 'moderation'
+
+        def sq(val):
+            if val is None:
+                return 'NULL'
+            return "'%s'" % str(val).replace("'", "''")
+
+        category_id = body.get('category_id')
+        cat_val = str(int(category_id)) if category_id else 'NULL'
+        work_items_json = json.dumps(body.get('work_items', []))
+        attachments_json = json.dumps(body.get('attachments', []))
+        bid_step = body.get('bid_step', 1000)
+        work_duration = body.get('work_duration_days')
+        work_dur_val = str(int(work_duration)) if work_duration else 'NULL'
+        auto_ext = body.get('auto_extend_minutes', 0)
+        warranty = body.get('warranty_months')
+        warranty_val = str(int(warranty)) if warranty else 'NULL'
+        area = body.get('object_area')
+        area_val = str(float(area)) if area else 'NULL'
+
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO lots (customer_id, title, category_id, description, object_type, "
+            "object_area, address, city, region, start_price, bid_step, "
+            "work_start_date, work_end_date, work_duration_days, auction_end_at, "
+            "auto_extend_minutes, payment_terms, materials_by, warranty_months, "
+            "additional_conditions, attachments, work_items, status) "
+            "VALUES (%d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+            "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, '%s') RETURNING id"
+            % (
+                user['id'], sq(title), cat_val, sq(body.get('description')),
+                sq(body.get('object_type')), area_val,
+                sq(body.get('address')), sq(body.get('city')), sq(body.get('region')),
+                float(start_price), float(bid_step),
+                sq(body.get('work_start_date')), sq(body.get('work_end_date')),
+                work_dur_val, sq(auction_end),
+                int(auto_ext), sq(body.get('payment_terms')), sq(body.get('materials_by')),
+                warranty_val, sq(body.get('additional_conditions')),
+                sq(attachments_json), sq(work_items_json), status
+            )
+        )
+        lot_id = cur.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'id': lot_id, 'status': status})}
+
+    if method == 'PUT' and action == 'update':
+        user = get_auth_user(event, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        body = json.loads(event.get('body', '{}'))
+        lot_id = body.get('id')
+        if not lot_id:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id лота'})}
+
+        cur = conn.cursor()
+        cur.execute("SELECT customer_id, status FROM lots WHERE id = %d" % int(lot_id))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Лот не найден'})}
+        if row[0] != user['id'] and user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+        if row[1] not in ('draft', 'moderation') and user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Лот нельзя редактировать после начала торгов'})}
+
+        updates = []
+        for f in ['title', 'description', 'object_type', 'address', 'city', 'region', 'payment_terms', 'materials_by', 'additional_conditions']:
+            if f in body:
+                updates.append("%s = '%s'" % (f, str(body[f]).replace("'", "''")))
+        for f in ['start_price', 'bid_step', 'work_duration_days', 'auto_extend_minutes', 'warranty_months', 'object_area', 'category_id']:
+            if f in body:
+                if body[f] is None:
+                    updates.append("%s = NULL" % f)
+                else:
+                    updates.append("%s = %s" % (f, body[f]))
+        if 'auction_end_at' in body:
+            updates.append("auction_end_at = '%s'" % str(body['auction_end_at']).replace("'", "''"))
+        if 'status' in body:
+            new_status = body['status']
+            if new_status == 'active' and user['role'] != 'admin':
+                new_status = 'moderation'
+            updates.append("status = '%s'" % new_status)
+        if 'work_items' in body:
+            updates.append("work_items = '%s'::jsonb" % json.dumps(body['work_items']).replace("'", "''"))
+        if updates:
+            updates.append("updated_at = NOW()")
+            cur.execute("UPDATE lots SET %s WHERE id = %d" % (', '.join(updates), int(lot_id)))
+            conn.commit()
+
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    if method == 'GET' and action == 'my':
+        user = get_auth_user(event, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        cur = conn.cursor()
+        status_filter = params.get('status', 'all')
+        where = "l.customer_id = %d" % user['id']
+        if status_filter != 'all':
+            where += " AND l.status = '%s'" % status_filter.replace("'", "''")
+        cur.execute(LOT_SELECT + " WHERE " + where + " ORDER BY l.created_at DESC")
+        lots = [lot_row_to_dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'lots': lots})}
+
+    if method == 'POST' and action == 'approve':
+        user = get_auth_user(event, conn)
+        if not user or user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+        body = json.loads(event.get('body', '{}'))
+        lot_id = body.get('id')
+        lot_action = body.get('action', 'approve')
+        cur = conn.cursor()
+        if lot_action == 'approve':
+            cur.execute("UPDATE lots SET status = 'active', updated_at = NOW() WHERE id = %d AND status = 'moderation'" % int(lot_id))
+        elif lot_action == 'reject':
+            reason = body.get('reason', '')
+            cur.execute("UPDATE lots SET status = 'cancelled', cancel_reason = '%s', updated_at = NOW() WHERE id = %d" % (reason.replace("'", "''"), int(lot_id)))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    conn.close()
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: list, categories, get, create, update, my, approve'})}

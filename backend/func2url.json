@@ -1,0 +1,6 @@
+{
+  "notifications": "https://functions.poehali.dev/e0405016-62b5-4f94-8ab3-76294f7da960",
+  "lots": "https://functions.poehali.dev/0142e8aa-e6b0-486b-bee2-a7cb178cabe2",
+  "auth": "https://functions.poehali.dev/00ba2552-9e7b-46cb-b199-bed4d85ff6c4",
+  "bids": "https://functions.poehali.dev/a99d8b6c-d1f3-4acb-9b0e-da660c9a1acd"
+}
