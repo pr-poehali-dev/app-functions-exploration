@@ -151,7 +151,8 @@ def handler(event, context):
         if is_completed or is_owner or is_admin:
             cur.execute(
                 "SELECT b.id, b.contractor_id, b.amount, b.comment, b.created_at, b.is_withdrawn, "
-                "u.full_name, u.company_name, u.rating, u.deals_count, u.is_verified, u.city "
+                "u.full_name, u.company_name, u.rating, u.deals_count, u.is_verified, u.city, "
+                "u.about, u.specializations, u.experience_years, u.entity_type, u.reviews_count "
                 "FROM bids b JOIN users u ON b.contractor_id = u.id "
                 "WHERE b.lot_id = %d AND b.is_withdrawn = FALSE "
                 "ORDER BY b.amount ASC" % int(lot_id)
@@ -163,7 +164,10 @@ def handler(event, context):
                     'comment': r[3], 'created_at': r[4].isoformat() if r[4] else None,
                     'contractor_name': r[6], 'company_name': r[7],
                     'rating': float(r[8]) if r[8] else 0, 'deals_count': r[9],
-                    'is_verified': r[10], 'city': r[11]
+                    'is_verified': r[10], 'city': r[11],
+                    'about': r[12], 'specializations': r[13] or [],
+                    'experience_years': r[14], 'entity_type': r[15],
+                    'reviews_count': r[16]
                 })
         else:
             cur.execute(
@@ -213,9 +217,10 @@ def handler(event, context):
         body = json.loads(event.get('body', '{}'))
         lot_id = body.get('lot_id')
         contractor_id = body.get('contractor_id')
+        reason = body.get('reason', '')
 
         cur = conn.cursor()
-        cur.execute("SELECT customer_id, status FROM lots WHERE id = %d" % int(lot_id))
+        cur.execute("SELECT customer_id, status, title FROM lots WHERE id = %d" % int(lot_id))
         lot = cur.fetchone()
         if not lot:
             conn.close()
@@ -231,15 +236,71 @@ def handler(event, context):
             "UPDATE lots SET winner_id = %d, status = 'in_work', updated_at = NOW() WHERE id = %d"
             % (int(contractor_id), int(lot_id))
         )
+
         cur.execute(
             "INSERT INTO notifications (user_id, type, title, message, data) "
-            "VALUES (%d, 'winner', 'Вы выбраны исполнителем!', 'Заказчик выбрал вас', "
+            "VALUES (%d, 'winner', 'Вы выбраны исполнителем!', 'Заказчик выбрал вас для лота «%s»', "
             "'{\"lot_id\": %d}'::jsonb)"
-            % (int(contractor_id), int(lot_id))
+            % (int(contractor_id), str(lot[2]).replace("'", "''"), int(lot_id))
         )
+
+        cur.execute(
+            "SELECT DISTINCT contractor_id FROM bids WHERE lot_id = %d AND contractor_id != %d"
+            % (int(lot_id), int(contractor_id))
+        )
+        losers = cur.fetchall()
+        for loser in losers:
+            cur.execute(
+                "INSERT INTO notifications (user_id, type, title, message, data) "
+                "VALUES (%d, 'lot_result', 'Торги завершены', 'По лоту «%s» выбран другой подрядчик', "
+                "'{\"lot_id\": %d}'::jsonb)"
+                % (loser[0], str(lot[2]).replace("'", "''"), int(lot_id))
+            )
+
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    # POST ?action=reject_all - customer rejects all bids
+    if method == 'POST' and action == 'reject_all':
+        user = get_auth_user(event, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        body = json.loads(event.get('body', '{}'))
+        lot_id = body.get('lot_id')
+        reason = body.get('reason', 'Заказчик отклонил все предложения')
+
+        cur = conn.cursor()
+        cur.execute("SELECT customer_id, status, title FROM lots WHERE id = %d" % int(lot_id))
+        lot = cur.fetchone()
+        if not lot:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Лот не найден'})}
+        if lot[0] != user['id'] and user['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        cur.execute(
+            "UPDATE lots SET status = 'cancelled', cancel_reason = '%s', updated_at = NOW() WHERE id = %d"
+            % (reason.replace("'", "''"), int(lot_id))
+        )
+
+        cur.execute(
+            "SELECT DISTINCT contractor_id FROM bids WHERE lot_id = %d" % int(lot_id)
+        )
+        for row in cur.fetchall():
+            cur.execute(
+                "INSERT INTO notifications (user_id, type, title, message, data) "
+                "VALUES (%d, 'lot_cancelled', 'Лот отменён', 'Заказчик отклонил все предложения по лоту «%s»', "
+                "'{\"lot_id\": %d}'::jsonb)"
+                % (row[0], str(lot[2]).replace("'", "''"), int(lot_id))
+            )
+
         conn.commit()
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
     conn.close()
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: place, list, my, select_winner'})}
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: place, list, my, select_winner, reject_all'})}

@@ -582,17 +582,162 @@ function LotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
   );
 }
 
+// ============ CONTRACTOR CARD (for selection screen) ============
+interface ExtendedBid extends Bid {
+  about?: string;
+  specializations?: string[];
+  experience_years?: number;
+  entity_type?: string;
+  reviews_count?: number;
+}
+
+function ContractorCard({
+  bid,
+  isWinner,
+  onSelect,
+  selecting,
+}: {
+  bid: ExtendedBid;
+  isWinner: boolean;
+  onSelect: () => void;
+  selecting: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const entityLabel: Record<string, string> = {
+    individual: "Физ. лицо",
+    self_employed: "Самозанятый",
+    ip: "ИП",
+    legal: "Юр. лицо",
+  };
+
+  return (
+    <div
+      className={`bg-card border rounded-2xl overflow-hidden transition-all duration-200 ${
+        isWinner ? "border-emerald-500/40 shadow-lg shadow-emerald-500/10" : "border-border hover:border-primary/30"
+      }`}
+    >
+      {isWinner && (
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-5 py-2 flex items-center gap-2">
+          <Icon name="Trophy" size={14} className="text-emerald-400" />
+          <span className="text-xs font-semibold text-emerald-400">Выбранный подрядчик</span>
+        </div>
+      )}
+
+      <div className="p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
+            {(bid.company_name || bid.contractor_name || "?")[0]}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold">{bid.company_name || bid.contractor_name}</span>
+              {bid.is_verified && (
+                <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-full font-medium">
+                  <Icon name="BadgeCheck" size={10} /> Проверен
+                </span>
+              )}
+            </div>
+            {bid.city && (
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Icon name="MapPin" size={10} /> {bid.city}
+                {bid.entity_type && <span className="ml-2">{entityLabel[bid.entity_type] || bid.entity_type}</span>}
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
+              {bid.rating !== undefined && bid.rating > 0 && <StarRating rating={bid.rating} />}
+              <span className="text-xs text-muted-foreground">{bid.deals_count || 0} сделок</span>
+              <span className="text-xs text-muted-foreground">{bid.reviews_count || 0} отзывов</span>
+              {bid.experience_years !== undefined && bid.experience_years > 0 && (
+                <span className="text-xs text-muted-foreground">{bid.experience_years} лет опыта</span>
+              )}
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="text-2xl font-black text-primary">{formatPrice(bid.amount)}</div>
+          </div>
+        </div>
+
+        {bid.comment && (
+          <div className="mt-3 bg-muted/50 rounded-lg p-3">
+            <div className="text-[11px] text-muted-foreground mb-1">Комментарий к ставке</div>
+            <p className="text-sm">{bid.comment}</p>
+          </div>
+        )}
+
+        {expanded && (
+          <div className="mt-4 pt-4 border-t border-border animate-fade-in space-y-3">
+            {bid.about && (
+              <div>
+                <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">О компании</div>
+                <p className="text-sm leading-relaxed">{bid.about}</p>
+              </div>
+            )}
+            {bid.specializations && bid.specializations.length > 0 && (
+              <div>
+                <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Специализация</div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {bid.specializations.map((s) => (
+                    <span key={s} className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-md">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-background rounded-lg p-3 border border-border">
+                <div className="text-lg font-bold">{bid.deals_count || 0}</div>
+                <div className="text-[11px] text-muted-foreground">Сделок</div>
+              </div>
+              <div className="bg-background rounded-lg p-3 border border-border">
+                <div className="text-lg font-bold">{bid.rating?.toFixed(1) || "—"}</div>
+                <div className="text-[11px] text-muted-foreground">Рейтинг</div>
+              </div>
+              <div className="bg-background rounded-lg p-3 border border-border">
+                <div className="text-lg font-bold">{bid.experience_years || 0}</div>
+                <div className="text-[11px] text-muted-foreground">Лет опыта</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <Icon name={expanded ? "ChevronUp" : "ChevronDown"} size={14} />
+            {expanded ? "Свернуть" : "Подробнее"}
+          </button>
+          {!isWinner && (
+            <button
+              onClick={onSelect}
+              disabled={selecting}
+              className="ml-auto bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {selecting ? "Выбор..." : "Выбрать подрядчика"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ============ LOT DETAIL PAGE ============
 function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | null; onBack: () => void }) {
   const [lot, setLot] = useState<Lot | null>(null);
-  const [bids, setBids] = useState<Bid[]>([]);
+  const [bids, setBids] = useState<ExtendedBid[]>([]);
   const [bidAmount, setBidAmount] = useState("");
   const [bidComment, setBidComment] = useState("");
   const [placing, setPlacing] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [confirmSelect, setConfirmSelect] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+  const [sortBids, setSortBids] = useState<"price" | "rating" | "deals">("price");
 
   const load = useCallback(() => {
     api.lots.get(lotId).then((res) => setLot((res as { lot: Lot }).lot));
-    api.bids.list(lotId).then((res) => setBids((res as { bids: Bid[] }).bids));
+    api.bids.list(lotId).then((res) => setBids((res as { bids: ExtendedBid[] }).bids));
   }, [lotId]);
 
   useEffect(() => {
@@ -621,6 +766,34 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
     }
   };
 
+  const selectWinner = async (contractorId: number) => {
+    setSelecting(true);
+    try {
+      await api.bids.selectWinner({ lot_id: lotId, contractor_id: contractorId });
+      toast.success("Подрядчик выбран! Уведомление отправлено.");
+      setConfirmSelect(null);
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSelecting(false);
+    }
+  };
+
+  const rejectAll = async () => {
+    setSelecting(true);
+    try {
+      await api.bids.rejectAll({ lot_id: lotId, reason: rejectReason });
+      toast.success("Все предложения отклонены.");
+      setShowReject(false);
+      load();
+    } catch {
+      toast.error("Ошибка при отклонении");
+    } finally {
+      setSelecting(false);
+    }
+  };
+
   if (!lot) {
     return (
       <div className="text-center py-16">
@@ -632,6 +805,15 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
   const currentMin = lot.current_min_bid || lot.start_price;
   const isOwner = user?.id === lot.customer_id;
   const canBid = user?.role === "contractor" && !isOwner && lot.status === "active";
+  const isCompleted = lot.status === "completed";
+  const isInWork = lot.status === "in_work";
+  const canSelectWinner = isOwner && isCompleted && bids.length > 0;
+
+  const sortedBids = [...bids].sort((a, b) => {
+    if (sortBids === "rating") return (b.rating || 0) - (a.rating || 0);
+    if (sortBids === "deals") return (b.deals_count || 0) - (a.deals_count || 0);
+    return a.amount - b.amount;
+  });
 
   return (
     <div className="animate-fade-in max-w-5xl mx-auto px-6 py-8">
@@ -639,8 +821,24 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
         <Icon name="ArrowLeft" size={16} /> Назад к списку
       </button>
 
+      {/* Winner selection banner */}
+      {canSelectWinner && (
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-2xl p-6 mb-6 animate-fade-in">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-primary/15 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Icon name="Trophy" size={22} className="text-primary" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-bold mb-1">Торги завершены — выберите подрядчика</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {bids.length} подрядчиков подали ставки. Изучите профили, рейтинги и опыт каждого, затем выберите исполнителя. Вы не обязаны выбирать самую низкую цену.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6">
             <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
@@ -650,14 +848,12 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
               </div>
               <StatusBadge status={lot.status} />
             </div>
-
             {lot.description && (
               <div className="mt-4">
                 <div className="text-xs font-medium text-muted-foreground mb-2">ОПИСАНИЕ</div>
                 <p className="text-sm leading-relaxed text-foreground/90">{lot.description}</p>
               </div>
             )}
-
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border">
               {lot.city && (
                 <div>
@@ -686,65 +882,178 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
             </div>
           </div>
 
-          {/* Bids history */}
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <h2 className="font-bold mb-4 flex items-center gap-2">
-              <Icon name="TrendingDown" size={18} className="text-primary" />
-              История ставок ({bids.length})
-            </h2>
-            {bids.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-30" />
-                Пока нет ставок. Будьте первым!
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {bids.map((bid, i) => {
-                  const showName = bid.contractor_name && (isOwner || lot.status !== "active");
-                  return (
-                    <div
-                      key={bid.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border ${
-                        i === 0 ? "bg-primary/5 border-primary/20" : "bg-background border-border"
+          {/* === CONTRACTOR SELECTION (completed lot + owner) === */}
+          {canSelectWinner && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h2 className="font-bold text-lg flex items-center gap-2">
+                  <Icon name="Users" size={20} className="text-primary" />
+                  Участники торгов ({bids.length})
+                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Сортировка:</span>
+                  {(["price", "rating", "deals"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSortBids(s)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                        sortBids === s
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "text-muted-foreground border-border hover:border-primary/40"
                       }`}
                     >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        i === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                      }`}>
-                        {i + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm">
-                          {showName ? (
-                            <span className="flex items-center gap-1.5 flex-wrap">
-                              {bid.company_name || bid.contractor_name}
-                              {bid.is_verified && <Icon name="BadgeCheck" size={14} className="text-primary flex-shrink-0" />}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">Подрядчик #{bid.id}</span>
-                          )}
-                        </div>
-                        {bid.comment && <div className="text-xs text-muted-foreground mt-0.5">{bid.comment}</div>}
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="font-bold text-primary">{formatPrice(bid.amount)}</div>
-                        {showName && bid.rating !== undefined && bid.rating > 0 && (
-                          <StarRating rating={bid.rating} />
-                        )}
+                      {s === "price" ? "По цене" : s === "rating" ? "По рейтингу" : "По опыту"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {sortedBids.map((bid) => (
+                <div key={bid.id}>
+                  {confirmSelect === bid.contractor_id && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-2 animate-fade-in">
+                      <p className="text-sm font-medium mb-3">
+                        Вы уверены, что хотите выбрать <strong>{bid.company_name || bid.contractor_name}</strong> за <strong className="text-primary">{formatPrice(bid.amount)}</strong>?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => selectWinner(bid.contractor_id!)}
+                          disabled={selecting}
+                          className="bg-primary text-primary-foreground text-sm font-semibold px-5 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          {selecting ? "Подтверждение..." : "Подтвердить выбор"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmSelect(null)}
+                          className="bg-secondary text-secondary-foreground text-sm px-4 py-2 rounded-lg border border-border"
+                        >
+                          Отмена
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
+                  )}
+                  <ContractorCard
+                    bid={bid}
+                    isWinner={lot.winner_id === bid.contractor_id}
+                    onSelect={() => setConfirmSelect(bid.contractor_id!)}
+                    selecting={selecting}
+                  />
+                </div>
+              ))}
+
+              {/* Reject all */}
+              <div className="mt-4 pt-4 border-t border-border">
+                {!showReject ? (
+                  <button
+                    onClick={() => setShowReject(true)}
+                    className="text-sm text-muted-foreground hover:text-red-400 transition-colors flex items-center gap-1"
+                  >
+                    <Icon name="X" size={14} /> Отклонить все предложения
+                  </button>
+                ) : (
+                  <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 animate-fade-in">
+                    <p className="text-sm font-medium text-red-400 mb-3">Вы уверены? Лот будет отменён.</p>
+                    <textarea
+                      rows={2}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Укажите причину (опционально)"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:border-red-500/50 resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={rejectAll}
+                        disabled={selecting}
+                        className="bg-red-500/15 text-red-400 border border-red-500/20 text-sm font-semibold px-5 py-2 rounded-lg hover:bg-red-500/25 disabled:opacity-50"
+                      >
+                        Отклонить всех
+                      </button>
+                      <button onClick={() => setShowReject(false)} className="text-sm text-muted-foreground px-4 py-2">
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Winner result (in_work) */}
+          {isInWork && lot.winner_id && bids.length > 0 && (
+            <div className="animate-fade-in">
+              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Icon name="Trophy" size={20} className="text-emerald-400" />
+                Выбранный подрядчик
+              </h2>
+              {bids
+                .filter((b) => b.contractor_id === lot.winner_id)
+                .map((bid) => (
+                  <ContractorCard key={bid.id} bid={bid} isWinner={true} onSelect={() => {}} selecting={false} />
+                ))}
+            </div>
+          )}
+
+          {/* Bids history (for active lots or non-owners) */}
+          {!canSelectWinner && !(isInWork && lot.winner_id) && (
+            <div className="bg-card border border-border rounded-2xl p-6">
+              <h2 className="font-bold mb-4 flex items-center gap-2">
+                <Icon name="TrendingDown" size={18} className="text-primary" />
+                История ставок ({bids.length})
+              </h2>
+              {bids.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-30" />
+                  Пока нет ставок. Будьте первым!
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {bids.map((bid, i) => {
+                    const showName = bid.contractor_name && (isOwner || lot.status !== "active");
+                    return (
+                      <div
+                        key={bid.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          i === 0 ? "bg-primary/5 border-primary/20" : "bg-background border-border"
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}>
+                          {i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm">
+                            {showName ? (
+                              <span className="flex items-center gap-1.5 flex-wrap">
+                                {bid.company_name || bid.contractor_name}
+                                {bid.is_verified && <Icon name="BadgeCheck" size={14} className="text-primary flex-shrink-0" />}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Подрядчик #{bid.id}</span>
+                            )}
+                          </div>
+                          {bid.comment && <div className="text-xs text-muted-foreground mt-0.5">{bid.comment}</div>}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="font-bold text-primary">{formatPrice(bid.amount)}</div>
+                          {showName && bid.rating !== undefined && bid.rating > 0 && (
+                            <StarRating rating={bid.rating} />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-2xl p-6 sticky top-20">
             <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">
-              {lot.current_min_bid ? "Текущая минимальная" : "Начальная цена"}
+              {lot.current_min_bid ? "Минимальная ставка" : "Начальная цена"}
             </div>
             <div className="text-3xl font-black text-primary">{formatPrice(currentMin)}</div>
             {lot.current_min_bid && lot.current_min_bid < lot.start_price && (
@@ -758,8 +1067,10 @@ function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: User | nu
 
             <div className="mt-5 pt-5 border-t border-border space-y-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1.5"><Icon name="Clock" size={14} /> До завершения</span>
-                <span className="font-semibold text-primary">{timeLeft(lot.auction_end_at)}</span>
+                <span className="text-muted-foreground flex items-center gap-1.5"><Icon name="Clock" size={14} /> Статус торгов</span>
+                <span className={`font-semibold ${lot.status === "active" ? "text-primary" : "text-muted-foreground"}`}>
+                  {lot.status === "active" ? timeLeft(lot.auction_end_at) : statusLabel[lot.status]?.label || lot.status}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-1.5"><Icon name="Users" size={14} /> Участников</span>

@@ -50,6 +50,7 @@ def lot_row_to_dict(row):
         'created_at': row[27].isoformat() if row[27] else None,
         'customer_name': row[28] if len(row) > 28 else None,
         'category_name': row[29] if len(row) > 29 else None,
+        'decision_deadline': row[30].isoformat() if len(row) > 30 and row[30] else None,
     }
 
 LOT_SELECT = (
@@ -59,7 +60,7 @@ LOT_SELECT = (
     "l.auction_end_at, l.payment_terms, l.materials_by, l.warranty_months, "
     "l.additional_conditions, l.attachments, l.work_items, l.status, "
     "l.views_count, l.bids_count, l.winner_id, l.created_at, "
-    "u.full_name as customer_name, c.name as category_name "
+    "u.full_name as customer_name, c.name as category_name, l.decision_deadline "
     "FROM lots l "
     "LEFT JOIN users u ON l.customer_id = u.id "
     "LEFT JOIN categories c ON l.category_id = c.id "
@@ -76,6 +77,22 @@ def handler(event, context):
     headers = cors_headers()
 
     conn = get_db()
+
+    cur_auto = conn.cursor()
+    cur_auto.execute(
+        "UPDATE lots SET status = 'completed', updated_at = NOW() "
+        "WHERE status = 'active' AND auction_end_at < NOW()"
+    )
+    if cur_auto.rowcount > 0:
+        cur_auto.execute(
+            "INSERT INTO notifications (user_id, type, title, message, data) "
+            "SELECT customer_id, 'lot_completed', 'Торги завершены', "
+            "'Торги по вашему лоту завершены. Выберите подрядчика.', "
+            "json_build_object('lot_id', id)::jsonb "
+            "FROM lots WHERE status = 'completed' AND winner_id IS NULL "
+            "AND id NOT IN (SELECT COALESCE((data->>'lot_id')::int, 0) FROM notifications WHERE type = 'lot_completed')"
+        )
+        conn.commit()
 
     if method == 'GET' and action == 'list':
         cur = conn.cursor()

@@ -63,6 +63,8 @@ export const api = {
     my: () => request(`${BIDS_URL}?action=my`),
     selectWinner: (body: { lot_id: number; contractor_id: number }) =>
       request(`${BIDS_URL}?action=select_winner`, { method: "POST", body: JSON.stringify(body) }),
+    rejectAll: (body: { lot_id: number; reason?: string }) =>
+      request(`${BIDS_URL}?action=reject_all`, { method: "POST", body: JSON.stringify(body) }),
   },
   notifications: {
     list: () => request(`${NOTIF_URL}?action=list`),
