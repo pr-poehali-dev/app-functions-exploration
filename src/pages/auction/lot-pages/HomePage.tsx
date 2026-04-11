@@ -183,39 +183,137 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
   return (
     <div className="animate-fade-in">
       {/* HERO */}
-      <section className="relative py-16 md:py-20 px-6 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent pointer-events-none" />
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/8 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <section className="relative px-6 py-14 md:py-20 overflow-hidden border-b border-border">
         <div
-          className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
           style={{
-            backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
+            backgroundImage: "linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+            maskImage: "radial-gradient(ellipse at center, black 40%, transparent 80%)",
           }}
         />
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-medium px-3 py-1.5 rounded-full mb-6">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-            </span>
-            Обратный аукцион · Подрядные работы
+        <div className="max-w-6xl mx-auto relative z-10 grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
+          {/* LEFT: Content */}
+          <div>
+            <div className="inline-flex items-center gap-2 bg-card border border-border text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              <span className="text-muted-foreground">Сейчас онлайн</span>
+              <span className="font-bold text-primary">{activeLots}</span>
+              <span className="text-muted-foreground">лотов</span>
+            </div>
+
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black leading-[1.05] mb-5 tracking-tight">
+              Аукцион <span className="text-primary">подрядных работ</span>.
+            </h1>
+            <p className="text-xl md:text-2xl font-semibold text-foreground/90 mb-4 leading-snug">
+              Заказчик экономит — подрядчик зарабатывает.
+            </p>
+            <p className="text-base text-muted-foreground mb-8 leading-relaxed max-w-xl">
+              Размещайте лоты и получайте ставки с понижением от проверенных подрядчиков. Средняя экономия <span className="text-primary font-bold">{avgSavings}%</span> от начальной цены.
+            </p>
+
+            {/* Feature pills */}
+            <div className="grid sm:grid-cols-3 gap-3 mb-8 max-w-xl">
+              {[
+                { icon: "ShieldCheck", title: "Проверенные", text: "Верификация ИНН, паспорта, ОГРН" },
+                { icon: "TrendingDown", title: "Торги вниз", text: "Цена снижается, не растёт" },
+                { icon: "Wallet", title: "Без комиссий", text: "Участие бесплатное" },
+              ].map((f) => (
+                <div key={f.title} className="flex items-start gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Icon name={f.icon} size={15} className="text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold leading-tight">{f.title}</div>
+                    <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">{f.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-black leading-[1.02] mb-6 tracking-tight max-w-4xl">
-            Аукцион подрядных работ.<br />
-            <span className="relative text-primary">
-              Заказчик экономит — подрядчик зарабатывает.
-              <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" preserveAspectRatio="none">
-                <path d="M1,8 Q75,2 150,6 T299,5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
-              </svg>
-            </span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mb-10 leading-relaxed">
-            Размещайте лоты, получайте ставки с понижением от проверенных подрядчиков и выбирайте лучшего исполнителя. Экономия в среднем <span className="text-primary font-bold">{avgSavings}%</span> от начальной цены.
-          </p>
+          {/* RIGHT: Preview card */}
+          <div className="relative">
+            <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent rounded-3xl blur-2xl pointer-events-none" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl shadow-black/10 overflow-hidden">
+              <div className="bg-muted/40 border-b border-border px-5 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400/60" />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground ml-2">Лот №1247</span>
+                </div>
+                <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                  <Icon name="Flame" size={10} /> LIVE
+                </span>
+              </div>
+              <div className="p-5">
+                <div className="text-[11px] text-muted-foreground bg-muted inline-block px-2 py-0.5 rounded-md mb-2">Кровельные работы</div>
+                <h3 className="font-bold text-lg mb-1 leading-snug">Монтаж кровли склада, 1200 м²</h3>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4 flex-wrap">
+                  <span className="flex items-center gap-1"><Icon name="MapPin" size={11} /> Казань</span>
+                  <span className="flex items-center gap-1"><Icon name="Clock" size={11} className="text-primary" /> 2ч 14м</span>
+                  <span className="flex items-center gap-1"><Icon name="Users" size={11} /> 12 ставок</span>
+                </div>
+
+                <div className="bg-muted/40 rounded-xl p-4 mb-4">
+                  <div className="flex items-end justify-between mb-3">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Начальная</div>
+                      <div className="text-sm text-muted-foreground line-through">4 200 000 ₽</div>
+                    </div>
+                    <Icon name="ArrowRight" size={16} className="text-muted-foreground mb-1" />
+                    <div className="text-right">
+                      <div className="text-[10px] text-emerald-400 uppercase tracking-wider">Текущая</div>
+                      <div className="text-2xl font-black text-primary">3 420 000 ₽</div>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-background rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-primary to-emerald-400 w-[81%] rounded-full" />
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-[10px] text-muted-foreground">Снижение</span>
+                    <span className="text-[11px] font-bold text-emerald-400">−18.5% · −780 000 ₽</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { name: "СтройПро КЗН", price: "3 420 000 ₽", rating: 4.9, isLeader: true },
+                    { name: "РемМонтаж", price: "3 480 000 ₽", rating: 4.7, isLeader: false },
+                    { name: "КровляГрупп", price: "3 550 000 ₽", rating: 4.8, isLeader: false },
+                  ].map((b, i) => (
+                    <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${b.isLeader ? "bg-primary/5 border-primary/20" : "bg-background border-border"}`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${b.isLeader ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate flex items-center gap-1">
+                          {b.name}
+                          {b.isLeader && <Icon name="BadgeCheck" size={11} className="text-primary" />}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <span className="text-amber-400">★</span> {b.rating}
+                        </div>
+                      </div>
+                      <div className={`text-xs font-bold ${b.isLeader ? "text-primary" : "text-foreground/80"}`}>{b.price}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search bar — compact, below split */}
+        <div className="max-w-6xl mx-auto relative z-10 mt-10">
 
           {/* Полный блок фильтров */}
           <form onSubmit={handleSearch} className="mb-6">
