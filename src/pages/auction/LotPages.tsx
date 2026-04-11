@@ -352,7 +352,20 @@ export function ContractorCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold">{bid.company_name || bid.contractor_name}</span>
+              {bid.contractor_id ? (
+                <a
+                  href={`/contractor/${bid.contractor_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold hover:text-primary transition-colors inline-flex items-center gap-1 group"
+                  title="Открыть профиль в новой вкладке"
+                >
+                  {bid.company_name || bid.contractor_name}
+                  <Icon name="ExternalLink" size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ) : (
+                <span className="font-bold">{bid.company_name || bid.contractor_name}</span>
+              )}
               {bid.is_verified && (
                 <span className="flex items-center gap-1 text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-full font-medium">
                   <Icon name="BadgeCheck" size={10} /> Проверен

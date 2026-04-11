@@ -1,0 +1,48 @@
+import { useParams, useNavigate } from "react-router-dom";
+import Icon from "@/components/ui/icon";
+import { ContractorDetailPage } from "./auction/ContractorsPage";
+
+const ContractorPublicPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const contractorId = parseInt(id || "0", 10);
+
+  if (!contractorId) {
+    return (
+      <div className="min-h-screen bg-background font-golos flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <Icon name="AlertCircle" size={40} className="mx-auto mb-3 opacity-30" />
+          <p>Неверная ссылка</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background font-golos">
+      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-md border-b border-border">
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
+          <button
+            onClick={() => navigate("/")}
+            className="flex items-center gap-2.5 font-black text-lg tracking-tight"
+          >
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Icon name="Gavel" size={16} className="text-primary-foreground" />
+            </div>
+            <span className="hidden sm:inline">ПодрядБиржа</span>
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <Icon name="Home" size={14} />
+            На главную
+          </button>
+        </div>
+      </header>
+      <ContractorDetailPage contractorId={contractorId} onBack={() => navigate("/")} />
+    </div>
+  );
+};
+
+export default ContractorPublicPage;
