@@ -734,12 +734,11 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 font-black text-lg mb-3">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Icon name="Gavel" size={16} className="text-primary-foreground" />
-                </div>
-                Тендер Инфо
-              </div>
+              <img
+                src="https://cdn.poehali.dev/projects/7b6a137b-add6-4931-a12d-8f298fde2eca/bucket/a2e7eb89-e190-4ece-8d2f-164c39a974fd.png"
+                alt="Tender Pro"
+                className="h-12 w-auto object-contain mb-3"
+              />
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Обратный аукцион подрядных работ. Честные торги, проверенные исполнители.
               </p>
