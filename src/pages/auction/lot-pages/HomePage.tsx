@@ -155,7 +155,6 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
 
   const activeLots = stats?.active_lots || 0;
   const contractorsCount = stats?.contractors || 0;
-  const completedDeals = stats?.completed || 0;
   const avgSavings = stats?.avg_savings_pct || 0;
 
   const faqItems = [
@@ -445,25 +444,22 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
       </section>
 
       {/* METRICS */}
-      <section className="px-6 py-8 md:py-12 border-y border-border bg-card/30">
+      <section className="px-6 py-3 border-y border-border bg-card/30">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-center justify-center gap-4 md:gap-8 flex-wrap">
             {[
               { icon: "Package", value: activeLots.toLocaleString("ru-RU"), label: "Активных лотов", color: "text-primary" },
               { icon: "HardHat", value: contractorsCount.toLocaleString("ru-RU"), label: "Подрядчиков", color: "text-emerald-400" },
-              { icon: "CheckCircle2", value: completedDeals.toLocaleString("ru-RU"), label: "Завершённых сделок", color: "text-blue-400" },
               { icon: "PiggyBank", value: `${avgSavings}%`, label: "Средняя экономия", color: "text-amber-400" },
             ].map((m, i) => (
               <div
                 key={i}
-                className="bg-card border border-border rounded-2xl p-5 hover:border-primary/30 transition-all animate-slide-up"
+                className="flex items-center gap-2 animate-slide-up"
                 style={{ animationDelay: `${i * 0.08}s` }}
               >
-                <div className={`w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 ${m.color}`}>
-                  <Icon name={m.icon} size={22} />
-                </div>
-                <div className="text-2xl md:text-3xl font-black">{m.value}</div>
-                <div className="text-xs text-muted-foreground mt-1">{m.label}</div>
+                <Icon name={m.icon} size={16} className={m.color} />
+                <span className="text-base font-bold">{m.value}</span>
+                <span className="text-xs text-muted-foreground">{m.label}</span>
               </div>
             ))}
           </div>
