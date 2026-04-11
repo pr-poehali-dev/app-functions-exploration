@@ -734,10 +734,7 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 font-black text-lg mb-3">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Icon name="Gavel" size={16} className="text-primary-foreground" />
-                </div>
+              <div className="flex items-center gap-2 font-black text-lg mb-3">Тендер Инфо</div>
                 ПодрядБиржа
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
