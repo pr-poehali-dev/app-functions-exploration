@@ -157,6 +157,7 @@ export const api = {
       request(`${SOCIAL_URL}?action=sub_archive`, { method: "POST", body: JSON.stringify({ id }) }),
     dashboardContractor: () => request(`${SOCIAL_URL}?action=dashboard_contractor`),
     dashboardCustomer: () => request(`${SOCIAL_URL}?action=dashboard_customer`),
+    homeStats: () => request(`${SOCIAL_URL}?action=home_stats`),
   },
 };
 

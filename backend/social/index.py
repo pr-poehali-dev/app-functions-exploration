@@ -520,5 +520,99 @@ def handler(event, context):
             'lots_by_day': lots_by_day
         })}
 
+    if method == 'GET' and action == 'home_stats':
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM lots WHERE status = 'active'")
+        active_lots = cur.fetchone()[0] or 0
+        cur.execute("SELECT COUNT(*) FROM users WHERE role = 'contractor' AND is_blocked = FALSE")
+        contractors = cur.fetchone()[0] or 0
+        cur.execute("SELECT COUNT(*) FROM lots WHERE status IN ('completed','in_work','done')")
+        completed = cur.fetchone()[0] or 0
+        cur.execute(
+            "SELECT COALESCE(SUM(start_price - current_min_bid), 0) "
+            "FROM lots WHERE current_min_bid IS NOT NULL AND current_min_bid < start_price"
+        )
+        total_savings = float(cur.fetchone()[0] or 0)
+        cur.execute(
+            "SELECT COALESCE(AVG((start_price - current_min_bid) / start_price * 100), 0) "
+            "FROM lots WHERE current_min_bid IS NOT NULL AND current_min_bid < start_price AND start_price > 0"
+        )
+        avg_savings_pct = float(cur.fetchone()[0] or 0)
+
+        try:
+            cur.execute(
+                "SELECT rv.id, rv.rating, rv.comment, rv.created_at, u.full_name, u.company_name, u.role, lt.title "
+                "FROM reviews rv JOIN users u ON rv.author_id = u.id "
+                "LEFT JOIN lots lt ON rv.lot_id = lt.id "
+                "WHERE rv.comment IS NOT NULL AND LENGTH(rv.comment) > 10 "
+                "ORDER BY rv.created_at DESC LIMIT 6"
+            )
+            recent_reviews = []
+            for r in cur.fetchall():
+                recent_reviews.append({
+                    'id': r[0], 'rating': r[1], 'comment': r[2],
+                    'created_at': r[3].isoformat() if r[3] else None,
+                    'author_name': r[4], 'author_company': r[5],
+                    'author_role': r[6], 'lot_title': r[7]
+                })
+        except Exception:
+            conn.rollback()
+            recent_reviews = []
+
+        cur.execute(
+            "SELECT id, full_name, company_name, city, rating_points, badges, "
+            "deals_count, specializations, work_photos, is_verified "
+            "FROM users WHERE role = 'contractor' AND is_blocked = FALSE "
+            "ORDER BY rating_points DESC NULLS LAST LIMIT 4"
+        )
+        top_contractors = []
+        for r in cur.fetchall():
+            top_contractors.append({
+                'id': r[0], 'full_name': r[1], 'company_name': r[2], 'city': r[3],
+                'rating_points': r[4] or 0, 'badges': r[5] or [],
+                'deals_count': r[6] or 0, 'specializations': r[7] or [],
+                'work_photos': r[8] or [], 'is_verified': r[9]
+            })
+
+        cur.execute(
+            "SELECT c.id, c.name, c.slug, "
+            "(SELECT COUNT(*) FROM lots l WHERE l.category_id = c.id AND l.status = 'active') as lots_cnt "
+            "FROM categories c ORDER BY lots_cnt DESC LIMIT 8"
+        )
+        top_categories = []
+        for r in cur.fetchall():
+            top_categories.append({
+                'id': r[0], 'name': r[1], 'slug': r[2], 'lots_count': r[3] or 0
+            })
+
+        activity = []
+        try:
+            cur.execute(
+                "SELECT bd.created_at, u.full_name, lt.title, lt.id "
+                "FROM bids bd JOIN users u ON bd.contractor_id = u.id JOIN lots lt ON bd.lot_id = lt.id "
+                "WHERE bd.is_withdrawn = FALSE ORDER BY bd.created_at DESC LIMIT 6"
+            )
+            for r in cur.fetchall():
+                activity.append({
+                    'type': 'bid',
+                    'created_at': r[0].isoformat() if r[0] else None,
+                    'user_name': r[1], 'lot_title': r[2], 'lot_id': r[3]
+                })
+        except Exception:
+            conn.rollback()
+
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'active_lots': active_lots,
+            'contractors': contractors,
+            'completed': completed,
+            'total_savings': round(total_savings),
+            'avg_savings_pct': round(avg_savings_pct, 1),
+            'recent_reviews': recent_reviews,
+            'top_contractors': top_contractors,
+            'top_categories': top_categories,
+            'activity': activity
+        })}
+
     conn.close()
     return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Неизвестный action'})}

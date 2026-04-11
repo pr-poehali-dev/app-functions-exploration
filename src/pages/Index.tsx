@@ -189,7 +189,7 @@ const Index = () => {
 
       {/* Page content */}
       <main onClick={() => notifOpen && setNotifOpen(false)}>
-        {page === "home" && <HomePage onNavigate={setPage} user={user} />}
+        {page === "home" && <HomePage onNavigate={setPage} user={user} onOpenLot={openLot} />}
         {page === "lots" && <LotsPage onOpenLot={openLot} />}
         {page === "lot_detail" && selectedLotId && (
           <LotDetailPage lotId={selectedLotId} user={user} onBack={() => setPage("lots")} />
