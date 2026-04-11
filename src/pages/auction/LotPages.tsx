@@ -105,14 +105,32 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
   const [lots, setLots] = useState<Lot[]>([]);
   const [myLots, setMyLots] = useState<Lot[]>([]);
   const [stats, setStats] = useState<HomeStats | null>(null);
-  const [search, setSearch] = useState("");
+  const [homeCategories, setHomeCategories] = useState<Category[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showFaq, setShowFaq] = useState<number | null>(null);
+  const [heroFilters, setHeroFilters] = useState({
+    search: "",
+    category_id: "",
+    city: "",
+    sort: "new",
+    min_price: "",
+    max_price: "",
+  });
+
+  const heroHasActiveFilters = !!(
+    heroFilters.search || heroFilters.category_id || heroFilters.city || heroFilters.min_price || heroFilters.max_price
+  );
+
+  const resetHeroFilters = () => {
+    setHeroFilters({ search: "", category_id: "", city: "", sort: "new", min_price: "", max_price: "" });
+  };
 
   useEffect(() => {
     api.lots.list({ status: "active", per_page: 6, sort: "ending" }).then((res) => {
       setLots((res as { lots: Lot[] }).lots);
     }).catch(() => {});
     api.social.homeStats().then((res) => setStats(res as HomeStats)).catch(() => {});
+    api.lots.categories().then((res) => setHomeCategories((res as { categories: Category[] }).categories || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -132,11 +150,22 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
     }
   }, [user]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (search.trim()) {
-      (window as Window & { __homeSearch?: string }).__homeSearch = search.trim();
-    }
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const w = window as Window & {
+      __homeSearch?: string;
+      __homeCategoryId?: number;
+      __homeCity?: string;
+      __homeSort?: string;
+      __homeMinPrice?: string;
+      __homeMaxPrice?: string;
+    };
+    if (heroFilters.search.trim()) w.__homeSearch = heroFilters.search.trim();
+    if (heroFilters.category_id) w.__homeCategoryId = parseInt(heroFilters.category_id);
+    if (heroFilters.city.trim()) w.__homeCity = heroFilters.city.trim();
+    if (heroFilters.sort && heroFilters.sort !== "new") w.__homeSort = heroFilters.sort;
+    if (heroFilters.min_price) w.__homeMinPrice = heroFilters.min_price;
+    if (heroFilters.max_price) w.__homeMaxPrice = heroFilters.max_price;
     onNavigate("lots");
   };
 
@@ -205,23 +234,161 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
             Размещайте лоты, получайте ставки с понижением от проверенных подрядчиков и выбирайте лучшего исполнителя. Экономия в среднем <span className="text-primary font-bold">{avgSavings}%</span> от начальной цены.
           </p>
 
-          {/* Умный поиск */}
-          <form onSubmit={handleSearch} className="mb-6 max-w-2xl">
-            <div className="relative bg-card border-2 border-border rounded-2xl p-2 flex items-center gap-2 shadow-lg shadow-black/5 focus-within:border-primary/50 transition-all">
-              <Icon name="Search" size={20} className="text-muted-foreground ml-3" />
-              <input
-                type="text"
-                placeholder="Что нужно сделать? Например: монтаж кровли, электрика..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent outline-none text-sm md:text-base py-2"
-              />
-              <button
-                type="submit"
-                className="bg-primary text-primary-foreground font-semibold px-5 md:px-7 py-3 rounded-xl hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
-              >
-                Найти
-              </button>
+          {/* Полный блок фильтров */}
+          <form onSubmit={handleSearch} className="mb-6">
+            <div className="bg-card border border-border rounded-2xl p-4 shadow-xl shadow-black/5">
+              <div className="grid md:grid-cols-[1fr_180px_180px_auto_auto] gap-3 mb-3">
+                <div className="relative">
+                  <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Поиск по названию или описанию..."
+                    value={heroFilters.search}
+                    onChange={(e) => setHeroFilters({ ...heroFilters, search: e.target.value })}
+                    className="w-full bg-background border border-border rounded-lg pl-10 pr-9 py-2.5 text-sm focus:outline-none focus:border-primary/50"
+                  />
+                  {heroFilters.search && (
+                    <button
+                      type="button"
+                      onClick={() => setHeroFilters({ ...heroFilters, search: "" })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="X" size={14} />
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Icon name="MapPin" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Город"
+                    value={heroFilters.city}
+                    onChange={(e) => setHeroFilters({ ...heroFilters, city: e.target.value })}
+                    className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <select
+                  value={heroFilters.sort}
+                  onChange={(e) => setHeroFilters({ ...heroFilters, sort: e.target.value })}
+                  className="bg-background border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 cursor-pointer"
+                >
+                  <option value="new">Сначала новые</option>
+                  <option value="ending">Скоро завершатся</option>
+                  <option value="price_asc">Цена: дешёвые</option>
+                  <option value="price_desc">Цена: дорогие</option>
+                  <option value="bids">Больше ставок</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className={`text-xs font-medium px-4 py-2.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                    showAdvanced || heroFilters.min_price || heroFilters.max_price
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "bg-transparent text-muted-foreground border-border hover:border-primary/40"
+                  }`}
+                >
+                  <Icon name="SlidersHorizontal" size={14} />
+                  Фильтры
+                </button>
+                <button
+                  type="submit"
+                  className="bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5"
+                >
+                  <Icon name="Search" size={14} />
+                  Найти
+                </button>
+              </div>
+
+              {showAdvanced && (
+                <div className="pt-3 mt-3 border-t border-border animate-fade-in">
+                  <div className="grid md:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1.5 block">Цена от (₽)</label>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={heroFilters.min_price}
+                        onChange={(e) => setHeroFilters({ ...heroFilters, min_price: e.target.value })}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1.5 block">Цена до (₽)</label>
+                      <input
+                        type="number"
+                        placeholder="Без ограничения"
+                        value={heroFilters.max_price}
+                        onChange={(e) => setHeroFilters({ ...heroFilters, max_price: e.target.value })}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    <span className="text-xs text-muted-foreground self-center mr-1">Быстрый выбор:</span>
+                    {[
+                      { min: "", max: "100000", label: "до 100к" },
+                      { min: "100000", max: "500000", label: "100к — 500к" },
+                      { min: "500000", max: "1000000", label: "500к — 1 млн" },
+                      { min: "1000000", max: "5000000", label: "1 — 5 млн" },
+                      { min: "5000000", max: "", label: "от 5 млн" },
+                    ].map((r) => (
+                      <button
+                        key={r.label}
+                        type="button"
+                        onClick={() => setHeroFilters({ ...heroFilters, min_price: r.min, max_price: r.max })}
+                        className="text-[11px] bg-secondary text-secondary-foreground px-2.5 py-1 rounded-full hover:bg-primary/10 hover:text-primary transition-all"
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Categories */}
+              <div className="flex gap-2 flex-wrap mt-3">
+                <button
+                  type="button"
+                  onClick={() => setHeroFilters({ ...heroFilters, category_id: "" })}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                    !heroFilters.category_id
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-transparent text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  Все категории
+                </button>
+                {homeCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setHeroFilters({ ...heroFilters, category_id: String(cat.id) })}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
+                      heroFilters.category_id === String(cat.id)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-transparent text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {heroHasActiveFilters && (
+                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Активных фильтров: {[heroFilters.search, heroFilters.category_id, heroFilters.city, heroFilters.min_price, heroFilters.max_price].filter(Boolean).length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetHeroFilters}
+                    className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+                  >
+                    <Icon name="X" size={12} />
+                    Сбросить всё
+                  </button>
+                </div>
+              )}
             </div>
           </form>
 
@@ -668,19 +835,29 @@ export function LotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
   const [loading, setLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [filters, setFilters] = useState(() => {
-    const w = window as Window & { __homeSearch?: string; __homeCategoryId?: number };
-    const initialSearch = w.__homeSearch || "";
-    const initialCat = w.__homeCategoryId ? String(w.__homeCategoryId) : "";
+    const w = window as Window & {
+      __homeSearch?: string;
+      __homeCategoryId?: number;
+      __homeCity?: string;
+      __homeSort?: string;
+      __homeMinPrice?: string;
+      __homeMaxPrice?: string;
+    };
+    const initial = {
+      search: w.__homeSearch || "",
+      category_id: w.__homeCategoryId ? String(w.__homeCategoryId) : "",
+      city: w.__homeCity || "",
+      sort: w.__homeSort || "new",
+      min_price: w.__homeMinPrice || "",
+      max_price: w.__homeMaxPrice || "",
+    };
     w.__homeSearch = undefined;
     w.__homeCategoryId = undefined;
-    return {
-      search: initialSearch,
-      category_id: initialCat,
-      city: "",
-      sort: "new",
-      min_price: "",
-      max_price: "",
-    };
+    w.__homeCity = undefined;
+    w.__homeSort = undefined;
+    w.__homeMinPrice = undefined;
+    w.__homeMaxPrice = undefined;
+    return initial;
   });
 
   const loadLots = useCallback(() => {
