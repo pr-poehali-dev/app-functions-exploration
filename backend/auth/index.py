@@ -64,7 +64,7 @@ def get_user_by_token(token, conn):
         "SELECT u.id, u.email, u.phone, u.role, u.full_name, u.company_name, u.city, u.region, "
         "u.entity_type, u.inn, u.avatar_url, u.about, u.specializations, u.experience_years, "
         "u.rating, u.reviews_count, u.deals_count, u.is_verified, u.is_blocked, u.created_at, "
-        "u.rating_points, u.badges, u.work_photos "
+        "u.rating_points, u.badges, u.work_photos, u.verification_status, u.verification_docs, u.verification_comment "
         "FROM sessions s JOIN users u ON s.user_id = u.id "
         "WHERE s.token = '%s' AND s.expires_at > NOW()" % token.replace("'", "''")
     )
@@ -81,7 +81,10 @@ def get_user_by_token(token, conn):
         'created_at': row[19].isoformat() if row[19] else None,
         'rating_points': row[20] or 0,
         'badges': row[21] or [],
-        'work_photos': row[22] or []
+        'work_photos': row[22] or [],
+        'verification_status': row[23] or 'none',
+        'verification_docs': row[24] or [],
+        'verification_comment': row[25] or ''
     }
 
 def handler(event, context):
@@ -601,5 +604,131 @@ def handler(event, context):
         conn.commit()
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'work_photos': new_photos})}
+
+    # POST ?action=verify_upload - upload verification document
+    if method == 'POST' and action == 'verify_upload':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        user = get_user_by_token(token, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Сессия истекла'})}
+
+        import base64
+        import boto3
+        body = json.loads(event.get('body', '{}'))
+        data_b64 = body.get('data', '')
+        filename = body.get('filename', 'doc')
+        doc_type = body.get('doc_type', 'other')
+        ext = (filename.split('.')[-1] or 'bin').lower()
+        if ',' in data_b64:
+            data_b64 = data_b64.split(',', 1)[1]
+        try:
+            raw = base64.b64decode(data_b64)
+        except Exception:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Неверный формат'})}
+        if len(raw) > 10 * 1024 * 1024:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Файл не более 10 МБ'})}
+
+        content_type = 'application/pdf' if ext == 'pdf' else ('image/png' if ext == 'png' else 'image/jpeg')
+        s3 = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+        )
+        key = 'verification/u%d_%s_%s.%s' % (user['id'], doc_type, secrets.token_urlsafe(8), ext)
+        s3.put_object(Bucket='files', Key=key, Body=raw, ContentType=content_type)
+        cdn_url = 'https://cdn.poehali.dev/projects/%s/bucket/%s' % (os.environ['AWS_ACCESS_KEY_ID'], key)
+
+        cur = conn.cursor()
+        cur.execute("SELECT verification_docs FROM users WHERE id = %d" % user['id'])
+        r = cur.fetchone()
+        current = r[0] if r and r[0] else []
+        current.append({'type': doc_type, 'url': cdn_url, 'name': filename})
+        docs_json = json.dumps(current).replace("'", "''")
+        cur.execute(
+            "UPDATE users SET verification_docs = '%s'::jsonb, verification_status = 'pending', updated_at = NOW() WHERE id = %d"
+            % (docs_json, user['id'])
+        )
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'url': cdn_url, 'docs': current})}
+
+    # POST ?action=verify_review - admin approve/reject verification
+    if method == 'POST' and action == 'verify_review':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        user_id = body.get('user_id')
+        approve = body.get('approve', True)
+        comment = body.get('comment', '')
+
+        cur = conn.cursor()
+        if approve:
+            cur.execute(
+                "UPDATE users SET verification_status = 'verified', is_verified = TRUE, "
+                "verification_comment = '%s', updated_at = NOW() WHERE id = %d"
+                % (comment.replace("'", "''"), int(user_id))
+            )
+            cur.execute(
+                "INSERT INTO notifications (user_id, type, title, message) "
+                "VALUES (%d, 'verified', 'Верификация подтверждена', 'Ваш профиль проверен и получил значок «Проверен»')"
+                % int(user_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET verification_status = 'rejected', is_verified = FALSE, "
+                "verification_comment = '%s', updated_at = NOW() WHERE id = %d"
+                % (comment.replace("'", "''"), int(user_id))
+            )
+            cur.execute(
+                "INSERT INTO notifications (user_id, type, title, message) "
+                "VALUES (%d, 'verify_rejected', 'Верификация отклонена', '%s')"
+                % (int(user_id), comment.replace("'", "''") or 'Документы не приняты')
+            )
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    # GET ?action=verify_pending - admin list pending verifications
+    if method == 'GET' and action == 'verify_pending':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, full_name, company_name, role, email, phone, verification_docs, verification_status, updated_at "
+            "FROM users WHERE verification_status = 'pending' ORDER BY updated_at DESC"
+        )
+        users = []
+        for r in cur.fetchall():
+            users.append({
+                'id': r[0], 'full_name': r[1], 'company_name': r[2], 'role': r[3],
+                'email': r[4], 'phone': r[5], 'docs': r[6] or [],
+                'verification_status': r[7],
+                'updated_at': r[8].isoformat() if r[8] else None
+            })
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'users': users})}
 
     return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action'})}

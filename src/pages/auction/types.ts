@@ -1,4 +1,4 @@
-export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts" | "admin" | "contractors" | "contractor_detail";
+export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts" | "admin" | "contractors" | "contractor_detail" | "favorites" | "subscriptions" | "dashboard";
 export type Role = "customer" | "contractor" | "admin";
 
 export type Badge = "vip" | "gost";
@@ -39,6 +39,28 @@ export interface User {
   rating_points?: number;
   badges?: Badge[];
   work_photos?: string[];
+  verification_status?: "none" | "pending" | "verified" | "rejected";
+  verification_docs?: Array<{ type: string; url: string; name: string }>;
+  verification_comment?: string;
+}
+
+export interface LotAttachment {
+  url: string;
+  name: string;
+  size?: number;
+}
+
+export interface Review {
+  id: number;
+  lot_id: number;
+  author_id: number;
+  rating: number;
+  comment?: string;
+  created_at: string;
+  author_name: string;
+  author_company?: string;
+  author_role: Role;
+  lot_title?: string;
 }
 
 export interface Contractor {
@@ -88,6 +110,8 @@ export interface Lot {
   customer_name?: string;
   winner_id?: number;
   created_at: string;
+  object_photos?: string[];
+  attachments?: LotAttachment[];
 }
 
 export interface Bid {

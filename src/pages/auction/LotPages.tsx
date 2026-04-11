@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { User, Lot, Bid, Category, ExtendedBid, Page, Badge, BADGE_INFO, formatPrice, formatDate, timeLeft, statusLabel } from "./types";
+import { User, Lot, Bid, Category, ExtendedBid, Page, Badge, BADGE_INFO, LotAttachment, formatPrice, formatDate, timeLeft, statusLabel } from "./types";
 import { StatusBadge } from "./AuthProfilePages";
+import { ComplaintDialog } from "./social/ComplaintDialog";
+import { ReviewDialog } from "./social/ReviewDialog";
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -536,11 +538,32 @@ export function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: Us
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [sortBids, setSortBids] = useState<"price" | "rating" | "deals">("price");
+  const [isFav, setIsFav] = useState(false);
+  const [complaintOpen, setComplaintOpen] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ id: number; name: string } | null>(null);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api.lots.get(lotId).then((res) => setLot((res as { lot: Lot }).lot));
     api.bids.list(lotId).then((res) => setBids((res as { bids: ExtendedBid[] }).bids));
-  }, [lotId]);
+    if (user) {
+      api.social.favCheck(lotId).then((res) => setIsFav((res as { is_fav: boolean }).is_fav)).catch(() => {});
+    }
+  }, [lotId, user]);
+
+  const toggleFav = async () => {
+    if (!user) {
+      toast.error("Войдите, чтобы добавить в избранное");
+      return;
+    }
+    try {
+      await api.social.favLot(lotId, !isFav);
+      setIsFav(!isFav);
+      toast.success(!isFav ? "Добавлено в избранное" : "Удалено из избранного");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -617,11 +640,62 @@ export function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: Us
     return a.amount - b.amount;
   });
 
+  const photos = lot.object_photos || [];
+  const attachments: LotAttachment[] = (lot.attachments || []).filter((a) => a && a.url);
+
   return (
     <div className="animate-fade-in max-w-5xl mx-auto px-6 py-8">
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
-        <Icon name="ArrowLeft" size={16} /> Назад к списку
-      </button>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Icon name="ArrowLeft" size={16} /> Назад к списку
+        </button>
+        {user && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleFav}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                isFav ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-card text-muted-foreground border-border hover:border-red-500/30 hover:text-red-400"
+              }`}
+            >
+              <Icon name={isFav ? "Heart" : "Heart"} size={13} className={isFav ? "fill-current" : ""} />
+              {isFav ? "В избранном" : "В избранное"}
+            </button>
+            <button
+              onClick={() => setComplaintOpen(true)}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-red-400 hover:border-red-500/30 transition-all flex items-center gap-1.5"
+            >
+              <Icon name="Flag" size={13} />
+              Пожаловаться
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ComplaintDialog
+        open={complaintOpen}
+        onClose={() => setComplaintOpen(false)}
+        targetType="lot"
+        targetId={lotId}
+        targetName={lot.title}
+      />
+      {reviewTarget && (
+        <ReviewDialog
+          open={!!reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          lotId={lotId}
+          targetId={reviewTarget.id}
+          targetName={reviewTarget.name}
+          onSaved={load}
+        />
+      )}
+      {lightboxImg && (
+        <div
+          onClick={() => setLightboxImg(null)}
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-6 cursor-zoom-out animate-fade-in"
+        >
+          <img src={lightboxImg} alt="" className="max-w-full max-h-full rounded-xl" />
+        </div>
+      )}
 
       {/* Winner selection banner */}
       {canSelectWinner && (
@@ -682,6 +756,55 @@ export function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: Us
                 </div>
               )}
             </div>
+
+            {photos.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <div className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                  <Icon name="Image" size={13} />
+                  ФОТОГРАФИИ ОБЪЕКТА ({photos.length})
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                  {photos.map((url) => (
+                    <div
+                      key={url}
+                      onClick={() => setLightboxImg(url)}
+                      className="aspect-square rounded-lg overflow-hidden border border-border cursor-pointer hover:border-primary/40 transition-all"
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {attachments.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <div className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                  <Icon name="Paperclip" size={13} />
+                  ФАЙЛЫ ЛОТА ({attachments.length})
+                </div>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {attachments.map((a) => (
+                    <a
+                      key={a.url}
+                      href={a.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 bg-background border border-border rounded-lg p-3 hover:border-primary/40 transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="FileText" size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{a.name}</div>
+                        {a.size != null && <div className="text-[11px] text-muted-foreground">{(a.size / 1024).toFixed(1)} КБ</div>}
+                      </div>
+                      <Icon name="Download" size={14} className="text-muted-foreground" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* === CONTRACTOR SELECTION (completed lot + owner) === */}
@@ -783,10 +906,28 @@ export function LotDetailPage({ lotId, user, onBack }: { lotId: number; user: Us
           {/* Winner result (in_work) */}
           {isInWork && lot.winner_id && bids.length > 0 && (
             <div className="animate-fade-in">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Icon name="Trophy" size={20} className="text-emerald-400" />
-                Выбранный подрядчик
-              </h2>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h2 className="font-bold text-lg flex items-center gap-2">
+                  <Icon name="Trophy" size={20} className="text-emerald-400" />
+                  Выбранный подрядчик
+                </h2>
+                {user && (user.id === lot.customer_id || user.id === lot.winner_id) && (
+                  <button
+                    onClick={() => {
+                      const targetId = user.id === lot.customer_id ? lot.winner_id! : lot.customer_id;
+                      const winnerBid = bids.find((b) => b.contractor_id === lot.winner_id);
+                      const targetName = user.id === lot.customer_id
+                        ? (winnerBid?.company_name || winnerBid?.contractor_name || "Подрядчик")
+                        : (lot.customer_name || "Заказчик");
+                      setReviewTarget({ id: targetId, name: targetName });
+                    }}
+                    className="text-xs bg-primary/10 text-primary border border-primary/30 font-semibold px-4 py-2 rounded-lg hover:bg-primary/20 transition-all flex items-center gap-2"
+                  >
+                    <Icon name="Star" size={13} />
+                    Оставить отзыв
+                  </button>
+                )}
+              </div>
               {bids
                 .filter((b) => b.contractor_id === lot.winner_id)
                 .map((bid) => (
@@ -966,6 +1107,12 @@ export function MyLotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
   const [lots, setLots] = useState<Lot[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [objectPhotos, setObjectPhotos] = useState<string[]>([]);
+  const [lotAttachments, setLotAttachments] = useState<LotAttachment[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     title: "",
     category_id: "",
@@ -1013,6 +1160,8 @@ export function MyLotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
         materials_by: form.materials_by,
         warranty_months: parseInt(form.warranty_months),
         status: "active",
+        object_photos: objectPhotos,
+        attachments: lotAttachments,
       });
       toast.success("Лот отправлен на модерацию!");
       setShowForm(false);
@@ -1023,10 +1172,68 @@ export function MyLotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
         start_price: "",
         work_duration_days: "",
       });
+      setObjectPhotos([]);
+      setLotAttachments([]);
       load();
     } catch (err) {
       toast.error((err as Error).message);
     }
+  };
+
+  const uploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (objectPhotos.length >= 5) {
+      toast.error("Не более 5 фото объекта");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Размер не более 10 МБ");
+      return;
+    }
+    setUploadingPhoto(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = (reader.result as string).split(",")[1];
+        const res = await api.lots.uploadFile({ data: base64, filename: file.name, kind: "photo" });
+        const { url } = res as { url: string };
+        setObjectPhotos((prev) => [...prev, url]);
+        toast.success("Фото добавлено");
+      } catch (err) {
+        toast.error((err as Error).message);
+      } finally {
+        setUploadingPhoto(false);
+        if (photoInputRef.current) photoInputRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Размер не более 10 МБ");
+      return;
+    }
+    setUploadingFile(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = (reader.result as string).split(",")[1];
+        const res = await api.lots.uploadFile({ data: base64, filename: file.name, kind: "attachment" });
+        const { url, name, size } = res as { url: string; name: string; size: number };
+        setLotAttachments((prev) => [...prev, { url, name, size }]);
+        toast.success("Файл загружен");
+      } catch (err) {
+        toast.error((err as Error).message);
+      } finally {
+        setUploadingFile(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -1130,6 +1337,91 @@ export function MyLotsPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
                 placeholder="Подробно опишите объём и специфику работ..."
                 className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 resize-none"
               />
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-muted-foreground">Фото объекта (до 5)</label>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto || objectPhotos.length >= 5}
+                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Icon name={uploadingPhoto ? "Loader2" : "Plus"} size={12} className={uploadingPhoto ? "animate-spin" : ""} />
+                  Добавить фото
+                </button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={uploadPhoto}
+                  className="hidden"
+                />
+              </div>
+              {objectPhotos.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-border rounded-lg text-xs text-muted-foreground">
+                  Добавьте фотографии объекта, чтобы подрядчики лучше оценили объём работ
+                </div>
+              ) : (
+                <div className="grid grid-cols-5 gap-2">
+                  {objectPhotos.map((url) => (
+                    <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-border group">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setObjectPhotos((p) => p.filter((x) => x !== url))}
+                        className="absolute top-1 right-1 w-6 h-6 bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      >
+                        <Icon name="X" size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-muted-foreground">Файлы (сметы, чертежи, ТЗ)</label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile}
+                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Icon name={uploadingFile ? "Loader2" : "Paperclip"} size={12} className={uploadingFile ? "animate-spin" : ""} />
+                  Прикрепить файл
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,.jpg,.jpeg,.png"
+                  onChange={uploadFile}
+                  className="hidden"
+                />
+              </div>
+              {lotAttachments.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-border rounded-lg text-xs text-muted-foreground">
+                  PDF, Word, Excel, DWG, ZIP, изображения — до 10 МБ
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-2">
+                  {lotAttachments.map((a) => (
+                    <div key={a.url} className="flex items-center gap-2 bg-background border border-border rounded-lg p-2.5">
+                      <Icon name="FileText" size={14} className="text-primary shrink-0" />
+                      <span className="text-xs flex-1 truncate">{a.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLotAttachments((p) => p.filter((x) => x.url !== a.url))}
+                        className="text-red-400 hover:text-red-500"
+                      >
+                        <Icon name="X" size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <button type="submit" className="mt-5 bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-lg hover:bg-primary/90 transition-all">

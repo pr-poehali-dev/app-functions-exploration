@@ -8,6 +8,10 @@ import { HomePage, LotsPage, LotDetailPage, MyLotsPage, MyBidsPage } from "./auc
 import { FAQPage, ContactsPage } from "./auction/StaticPages";
 import { AdminPage } from "./auction/AdminPage";
 import { ContractorsPage, ContractorDetailPage } from "./auction/ContractorsPage";
+import { FavoritesPage } from "./auction/social/FavoritesPage";
+import { SubscriptionsPage } from "./auction/social/SubscriptionsPage";
+import { DashboardPage } from "./auction/social/DashboardPage";
+import { useTheme } from "@/hooks/useTheme";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -17,6 +21,7 @@ const Index = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const loadMe = useCallback(() => {
     if (!getToken()) return;
@@ -75,10 +80,12 @@ const Index = () => {
     { id: "home", label: "Главная", icon: "Home", show: true },
     { id: "lots", label: "Лоты", icon: "Briefcase", show: true },
     { id: "contractors", label: "Исполнители", icon: "HardHat", show: true },
+    { id: "dashboard", label: "Дашборд", icon: "BarChart3", show: user?.role === "contractor" || user?.role === "customer" },
     { id: "my_lots", label: "Мои лоты", icon: "FolderOpen", show: user?.role === "customer" },
     { id: "my_bids", label: "Мои ставки", icon: "Gavel", show: user?.role === "contractor" },
+    { id: "favorites", label: "Избранное", icon: "Heart", show: !!user },
+    { id: "subscriptions", label: "Подписки", icon: "BellRing", show: user?.role === "contractor" },
     { id: "profile", label: "Профиль", icon: "User", show: !!user },
-    { id: "faq", label: "FAQ", icon: "HelpCircle", show: true },
     { id: "admin", label: "Админ", icon: "Shield", show: user?.role === "admin" },
   ];
 
@@ -109,6 +116,13 @@ const Index = () => {
           </nav>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"
+              title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+            >
+              <Icon name={theme === "dark" ? "Sun" : "Moon"} size={16} className="text-muted-foreground" />
+            </button>
             {user ? (
               <>
                 <div className="relative">
@@ -190,6 +204,11 @@ const Index = () => {
         {page === "contractor_detail" && selectedContractorId && (
           <ContractorDetailPage contractorId={selectedContractorId} onBack={() => setPage("contractors")} />
         )}
+        {page === "favorites" && user && (
+          <FavoritesPage user={user} onOpenLot={openLot} onOpenContractor={openContractor} />
+        )}
+        {page === "subscriptions" && user && <SubscriptionsPage />}
+        {page === "dashboard" && user && <DashboardPage user={user} onOpenLot={openLot} />}
         {page === "admin" && user?.role === "admin" && <AdminPage onOpenLot={openLot} />}
       </main>
 

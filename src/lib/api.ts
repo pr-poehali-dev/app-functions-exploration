@@ -4,6 +4,7 @@ const AUTH_URL = (func2url as Record<string, string>).auth;
 const LOTS_URL = (func2url as Record<string, string>).lots;
 const BIDS_URL = (func2url as Record<string, string>).bids;
 const NOTIF_URL = (func2url as Record<string, string>).notifications;
+const SOCIAL_URL = (func2url as Record<string, string>).social;
 
 type JsonValue = Record<string, unknown>;
 
@@ -50,6 +51,11 @@ export const api = {
       request(`${AUTH_URL}?action=upload_photo`, { method: "POST", body: JSON.stringify({ data, ext }) }),
     removePhoto: (url: string) =>
       request(`${AUTH_URL}?action=remove_photo`, { method: "POST", body: JSON.stringify({ url }) }),
+    verifyUpload: (body: { data: string; filename: string; doc_type: string }) =>
+      request(`${AUTH_URL}?action=verify_upload`, { method: "POST", body: JSON.stringify(body) }),
+    verifyPending: () => request(`${AUTH_URL}?action=verify_pending`),
+    verifyReview: (body: { user_id: number; approve: boolean; comment?: string }) =>
+      request(`${AUTH_URL}?action=verify_review`, { method: "POST", body: JSON.stringify(body) }),
   },
   lots: {
     list: (params: Record<string, string | number | undefined> = {}) => {
@@ -81,6 +87,8 @@ export const api = {
     adminCategory: (body: JsonValue) =>
       request(`${LOTS_URL}?action=admin_category`, { method: "POST", body: JSON.stringify(body) }),
     adminStats: () => request(`${LOTS_URL}?action=admin_stats`),
+    uploadFile: (body: { data: string; filename: string; kind: string }) =>
+      request(`${LOTS_URL}?action=upload_file`, { method: "POST", body: JSON.stringify(body) }),
   },
   bids: {
     place: (body: { lot_id: number; amount: number; comment?: string }) =>
@@ -120,6 +128,35 @@ export const api = {
     list: () => request(`${NOTIF_URL}?action=list`),
     read: (id?: number) =>
       request(`${NOTIF_URL}?action=read`, { method: "POST", body: JSON.stringify(id ? { id } : {}) }),
+  },
+  social: {
+    reviews: (user_id: number) => request(`${SOCIAL_URL}?action=reviews&user_id=${user_id}`),
+    reviewCreate: (body: { lot_id: number; target_id: number; rating: number; comment?: string }) =>
+      request(`${SOCIAL_URL}?action=review_create`, { method: "POST", body: JSON.stringify(body) }),
+    reviewCheck: (lot_id: number, target_id: number) =>
+      request(`${SOCIAL_URL}?action=review_check&lot_id=${lot_id}&target_id=${target_id}`),
+    complaintCreate: (body: { target_type: "lot" | "user"; target_id: number; reason: string; message?: string }) =>
+      request(`${SOCIAL_URL}?action=complaint_create`, { method: "POST", body: JSON.stringify(body) }),
+    complaintsAdmin: (status?: string) =>
+      request(`${SOCIAL_URL}?action=complaints_admin${status ? `&status=${status}` : ""}`),
+    complaintResolve: (body: { id: number; status: string; comment?: string }) =>
+      request(`${SOCIAL_URL}?action=complaint_resolve`, { method: "POST", body: JSON.stringify(body) }),
+    favLot: (lot_id: number, add: boolean) =>
+      request(`${SOCIAL_URL}?action=fav_lot`, { method: "POST", body: JSON.stringify({ lot_id, add }) }),
+    favLots: () => request(`${SOCIAL_URL}?action=fav_lots`),
+    favCheck: (lot_id: number) => request(`${SOCIAL_URL}?action=fav_check&lot_id=${lot_id}`),
+    favContractor: (contractor_id: number, add: boolean) =>
+      request(`${SOCIAL_URL}?action=fav_contractor`, { method: "POST", body: JSON.stringify({ contractor_id, add }) }),
+    favContractors: () => request(`${SOCIAL_URL}?action=fav_contractors`),
+    favContractorCheck: (id: number) =>
+      request(`${SOCIAL_URL}?action=fav_contractor_check&id=${id}`),
+    subCreate: (body: { category_id?: number; city?: string }) =>
+      request(`${SOCIAL_URL}?action=sub_create`, { method: "POST", body: JSON.stringify(body) }),
+    subList: () => request(`${SOCIAL_URL}?action=sub_list`),
+    subArchive: (id: number) =>
+      request(`${SOCIAL_URL}?action=sub_archive`, { method: "POST", body: JSON.stringify({ id }) }),
+    dashboardContractor: () => request(`${SOCIAL_URL}?action=dashboard_contractor`),
+    dashboardCustomer: () => request(`${SOCIAL_URL}?action=dashboard_customer`),
   },
 };
 

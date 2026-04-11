@@ -51,6 +51,7 @@ def lot_row_to_dict(row):
         'customer_name': row[28] if len(row) > 28 else None,
         'category_name': row[29] if len(row) > 29 else None,
         'decision_deadline': row[30].isoformat() if len(row) > 30 and row[30] else None,
+        'object_photos': row[31] if len(row) > 31 and row[31] else [],
     }
 
 LOT_SELECT = (
@@ -60,7 +61,8 @@ LOT_SELECT = (
     "l.auction_end_at, l.payment_terms, l.materials_by, l.warranty_months, "
     "l.additional_conditions, l.attachments, l.work_items, l.status, "
     "l.views_count, l.bids_count, l.winner_id, l.created_at, "
-    "u.full_name as customer_name, c.name as category_name, l.decision_deadline "
+    "u.full_name as customer_name, c.name as category_name, l.decision_deadline, "
+    "l.object_photos "
     "FROM lots l "
     "LEFT JOIN users u ON l.customer_id = u.id "
     "LEFT JOIN categories c ON l.category_id = c.id "
@@ -202,6 +204,7 @@ def handler(event, context):
         cat_val = str(int(category_id)) if category_id else 'NULL'
         work_items_json = json.dumps(body.get('work_items', []))
         attachments_json = json.dumps(body.get('attachments', []))
+        object_photos_json = json.dumps((body.get('object_photos') or [])[:5])
         bid_step = body.get('bid_step', 1000)
         work_duration = body.get('work_duration_days')
         work_dur_val = str(int(work_duration)) if work_duration else 'NULL'
@@ -217,9 +220,9 @@ def handler(event, context):
             "object_area, address, city, region, start_price, bid_step, "
             "work_start_date, work_end_date, work_duration_days, auction_end_at, "
             "auto_extend_minutes, payment_terms, materials_by, warranty_months, "
-            "additional_conditions, attachments, work_items, status) "
+            "additional_conditions, attachments, work_items, status, object_photos) "
             "VALUES (%d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-            "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, '%s') RETURNING id"
+            "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, '%s', %s::jsonb) RETURNING id"
             % (
                 user['id'], sq(title), cat_val, sq(body.get('description')),
                 sq(body.get('object_type')), area_val,
@@ -229,7 +232,7 @@ def handler(event, context):
                 work_dur_val, sq(auction_end),
                 int(auto_ext), sq(body.get('payment_terms')), sq(body.get('materials_by')),
                 warranty_val, sq(body.get('additional_conditions')),
-                sq(attachments_json), sq(work_items_json), status
+                sq(attachments_json), sq(work_items_json), status, sq(object_photos_json)
             )
         )
         lot_id = cur.fetchone()[0]
@@ -281,6 +284,11 @@ def handler(event, context):
             updates.append("status = '%s'" % new_status)
         if 'work_items' in body:
             updates.append("work_items = '%s'::jsonb" % json.dumps(body['work_items']).replace("'", "''"))
+        if 'attachments' in body and isinstance(body['attachments'], list):
+            updates.append("attachments = '%s'::jsonb" % json.dumps(body['attachments']).replace("'", "''"))
+        if 'object_photos' in body and isinstance(body['object_photos'], list):
+            photos = body['object_photos'][:5]
+            updates.append("object_photos = '%s'::jsonb" % json.dumps(photos).replace("'", "''"))
         if updates:
             updates.append("updated_at = NOW()")
             cur.execute("UPDATE lots SET %s WHERE id = %d" % (', '.join(updates), int(lot_id)))
@@ -499,6 +507,57 @@ def handler(event, context):
             'bids': {
                 'total': total_bids, 'new_week': new_bids_week
             }
+        })}
+
+    if method == 'POST' and action == 'upload_file':
+        user = get_auth_user(event, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        import base64
+        import secrets as _secrets
+        import boto3
+        body = json.loads(event.get('body', '{}'))
+        data_b64 = body.get('data', '')
+        filename = body.get('filename', 'file')
+        kind = body.get('kind', 'attachment')
+        ext = (filename.split('.')[-1] or 'bin').lower()
+        if ',' in data_b64:
+            data_b64 = data_b64.split(',', 1)[1]
+        try:
+            raw = base64.b64decode(data_b64)
+        except Exception:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Неверный формат файла'})}
+        if len(raw) > 10 * 1024 * 1024:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Размер файла не более 10 МБ'})}
+
+        content_types = {
+            'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+            'webp': 'image/webp', 'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'dwg': 'application/acad', 'zip': 'application/zip',
+        }
+        content_type = content_types.get(ext, 'application/octet-stream')
+
+        s3 = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+        )
+        prefix = 'lot_photos' if kind == 'photo' else 'lot_files'
+        safe_name = ''.join(c for c in filename if c.isalnum() or c in ('.', '_', '-'))[:60]
+        key = '%s/u%d_%s_%s' % (prefix, user['id'], _secrets.token_urlsafe(10), safe_name)
+        s3.put_object(Bucket='files', Key=key, Body=raw, ContentType=content_type)
+        cdn_url = 'https://cdn.poehali.dev/projects/%s/bucket/%s' % (os.environ['AWS_ACCESS_KEY_ID'], key)
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'url': cdn_url, 'name': filename, 'size': len(raw), 'kind': kind
         })}
 
     conn.close()

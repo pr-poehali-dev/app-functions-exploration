@@ -188,10 +188,15 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
     specializations: (user.specializations || []).join(", "),
   });
   const [uploading, setUploading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docType, setDocType] = useState("passport");
   const fileRef = useRef<HTMLInputElement>(null);
+  const docRef = useRef<HTMLInputElement>(null);
   const photos = user.work_photos || [];
   const badges = user.badges || [];
   const ratingPoints = user.rating_points || 0;
+  const verificationStatus = user.verification_status || "none";
+  const verificationDocs = user.verification_docs || [];
 
   const save = async () => {
     try {
@@ -261,6 +266,32 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
     } catch (err) {
       toast.error((err as Error).message);
     }
+  };
+
+  const uploadDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Файл не более 10 МБ");
+      return;
+    }
+    setUploadingDoc(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = (reader.result as string).split(",")[1];
+        await api.auth.verifyUpload({ data: base64, filename: file.name, doc_type: docType });
+        const res = await api.auth.me() as { user: User };
+        onUpdate(res.user);
+        toast.success("Документ отправлен на проверку");
+      } catch (err) {
+        toast.error((err as Error).message);
+      } finally {
+        setUploadingDoc(false);
+        if (docRef.current) docRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -443,6 +474,89 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
           )}
         </div>
       )}
+
+      <div className="bg-card border border-border rounded-2xl p-6 mt-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <Icon name="ShieldCheck" size={18} className="text-primary" />
+              Верификация профиля
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Загрузите документы, чтобы получить значок «Проверен». Это необязательно, но повышает доверие.
+            </p>
+          </div>
+          {verificationStatus === "verified" && (
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <Icon name="CheckCircle2" size={12} /> Проверен
+            </span>
+          )}
+          {verificationStatus === "pending" && (
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+              <Icon name="Clock" size={12} /> На проверке
+            </span>
+          )}
+          {verificationStatus === "rejected" && (
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 flex items-center gap-1">
+              <Icon name="XCircle" size={12} /> Отклонено
+            </span>
+          )}
+        </div>
+
+        {user.verification_comment && (
+          <div className="bg-background border border-border rounded-lg p-3 mb-4 text-xs">
+            <span className="text-muted-foreground">Комментарий администратора: </span>
+            <span>{user.verification_comment}</span>
+          </div>
+        )}
+
+        {verificationDocs.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {verificationDocs.map((d, i) => (
+              <div key={i} className="flex items-center gap-3 bg-background border border-border rounded-lg p-3">
+                <Icon name="FileText" size={14} className="text-primary shrink-0" />
+                <span className="text-sm flex-1 truncate">{d.name}</span>
+                <span className="text-[11px] text-muted-foreground">{d.type}</span>
+                <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
+                  Открыть
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Тип документа</label>
+            <select
+              value={docType}
+              onChange={(e) => setDocType(e.target.value)}
+              className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 cursor-pointer"
+            >
+              <option value="passport">Паспорт</option>
+              <option value="inn">ИНН</option>
+              <option value="ogrn">ОГРН / ЕГРЮЛ</option>
+              <option value="license">Лицензия / Сертификат</option>
+              <option value="other">Другое</option>
+            </select>
+          </div>
+          <button
+            onClick={() => docRef.current?.click()}
+            disabled={uploadingDoc}
+            className="bg-primary text-primary-foreground font-semibold px-4 py-2.5 rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            <Icon name={uploadingDoc ? "Loader2" : "Upload"} size={14} className={uploadingDoc ? "animate-spin" : ""} />
+            {uploadingDoc ? "Загрузка..." : "Загрузить"}
+          </button>
+          <input
+            ref={docRef}
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            onChange={uploadDoc}
+            className="hidden"
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { Contractor, Badge, BADGE_INFO } from "./types";
+import { Contractor, Badge, BADGE_INFO, Review, formatDate } from "./types";
+import { ComplaintDialog } from "./social/ComplaintDialog";
 
 function BadgeChip({ badge }: { badge: Badge }) {
   const info = BADGE_INFO[badge];
@@ -254,8 +255,11 @@ export function ContractorsPage({ onOpen }: { onOpen: (id: number) => void }) {
 
 export function ContractorDetailPage({ contractorId, onBack }: { contractorId: number; onBack: () => void }) {
   const [contractor, setContractor] = useState<Contractor | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [isFav, setIsFav] = useState(false);
+  const [complaintOpen, setComplaintOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -264,7 +268,25 @@ export function ContractorDetailPage({ contractorId, onBack }: { contractorId: n
       .then((res) => setContractor((res as { contractor: Contractor }).contractor))
       .catch((err) => toast.error((err as Error).message))
       .finally(() => setLoading(false));
+    api.social
+      .reviews(contractorId)
+      .then((res) => setReviews((res as { reviews: Review[] }).reviews || []))
+      .catch(() => {});
+    api.social
+      .favContractorCheck(contractorId)
+      .then((res) => setIsFav((res as { is_fav: boolean }).is_fav))
+      .catch(() => {});
   }, [contractorId]);
+
+  const toggleFav = async () => {
+    try {
+      await api.social.favContractor(contractorId, !isFav);
+      setIsFav(!isFav);
+      toast.success(!isFav ? "Добавлен в избранное" : "Удалён из избранного");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
 
   if (loading) {
     return (
@@ -289,13 +311,41 @@ export function ContractorDetailPage({ contractorId, onBack }: { contractorId: n
 
   return (
     <div className="animate-fade-in max-w-4xl mx-auto px-6 py-10">
-      <button
-        onClick={onBack}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-6 flex items-center gap-1"
-      >
-        <Icon name="ChevronLeft" size={14} />
-        Все исполнители
-      </button>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <button
+          onClick={onBack}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+        >
+          <Icon name="ChevronLeft" size={14} />
+          Все исполнители
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleFav}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+              isFav ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-card text-muted-foreground border-border hover:border-red-500/30 hover:text-red-400"
+            }`}
+          >
+            <Icon name="Heart" size={13} className={isFav ? "fill-current" : ""} />
+            {isFav ? "В избранном" : "В избранное"}
+          </button>
+          <button
+            onClick={() => setComplaintOpen(true)}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-red-400 hover:border-red-500/30 transition-all flex items-center gap-1.5"
+          >
+            <Icon name="Flag" size={13} />
+            Пожаловаться
+          </button>
+        </div>
+      </div>
+
+      <ComplaintDialog
+        open={complaintOpen}
+        onClose={() => setComplaintOpen(false)}
+        targetType="user"
+        targetId={contractorId}
+        targetName={contractor.full_name}
+      />
 
       <div className="bg-card border border-border rounded-2xl p-6 mb-6">
         <div className="flex items-start gap-5">
@@ -379,6 +429,47 @@ export function ContractorDetailPage({ contractorId, onBack }: { contractorId: n
           </div>
         </div>
       )}
+
+      <div className="bg-card border border-border rounded-2xl p-6 mt-6">
+        <h3 className="font-bold mb-4 flex items-center gap-2">
+          <Icon name="Star" size={16} className="text-amber-400" />
+          Отзывы ({reviews.length})
+        </h3>
+        {reviews.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Пока нет отзывов</p>
+        ) : (
+          <div className="space-y-3">
+            {reviews.map((r) => (
+              <div key={r.id} className="bg-background border border-border rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                      {r.author_name[0]}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">{r.author_name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {r.author_role === "customer" ? "Заказчик" : "Подрядчик"} · {formatDate(r.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span key={n} className={n <= r.rating ? "text-amber-400" : "text-muted-foreground/30"}>★</span>
+                    ))}
+                  </div>
+                </div>
+                {r.lot_title && (
+                  <div className="text-[11px] text-muted-foreground mb-2">
+                    По лоту: <span className="text-foreground/80">{r.lot_title}</span>
+                  </div>
+                )}
+                {r.comment && <p className="text-sm text-foreground/90">{r.comment}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {lightbox && (
         <div

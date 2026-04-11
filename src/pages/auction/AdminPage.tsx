@@ -4,8 +4,9 @@ import { StatsTab } from "./admin/StatsTab";
 import { LotsTab } from "./admin/LotsTab";
 import { UsersTab } from "./admin/UsersTab";
 import { BidsTab, CategoriesTab } from "./admin/BidsAndCategoriesTab";
+import { ComplaintsTab, VerificationTab } from "./admin/ComplaintsAndVerificationTab";
 
-type Tab = "stats" | "lots" | "users" | "bids" | "categories";
+type Tab = "stats" | "lots" | "users" | "bids" | "categories" | "complaints" | "verification";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "stats", label: "Статистика", icon: "BarChart3" },
@@ -13,6 +14,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "users", label: "Пользователи", icon: "Users" },
   { id: "bids", label: "Ставки", icon: "Gavel" },
   { id: "categories", label: "Категории", icon: "FolderOpen" },
+  { id: "complaints", label: "Жалобы", icon: "Flag" },
+  { id: "verification", label: "Верификация", icon: "ShieldCheck" },
 ];
 
 export function AdminPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
@@ -51,6 +54,8 @@ export function AdminPage({ onOpenLot }: { onOpenLot: (id: number) => void }) {
         {tab === "users" && <UsersTab />}
         {tab === "bids" && <BidsTab />}
         {tab === "categories" && <CategoriesTab />}
+        {tab === "complaints" && <ComplaintsTab />}
+        {tab === "verification" && <VerificationTab />}
       </div>
     </div>
   );
