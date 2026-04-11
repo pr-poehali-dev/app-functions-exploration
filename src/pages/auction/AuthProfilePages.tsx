@@ -190,6 +190,7 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
   const [uploading, setUploading] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docType, setDocType] = useState("passport");
+  const [switchingRole, setSwitchingRole] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const photos = user.work_photos || [];
@@ -197,6 +198,21 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
   const ratingPoints = user.rating_points || 0;
   const verificationStatus = user.verification_status || "none";
   const verificationDocs = user.verification_docs || [];
+
+  const switchRole = async (role: "customer" | "contractor") => {
+    if (user.role === role || switchingRole) return;
+    setSwitchingRole(true);
+    try {
+      await api.auth.switchRole(role);
+      const res = await api.auth.me() as { user: User };
+      onUpdate(res.user);
+      toast.success(role === "customer" ? "Вы переключились в режим заказчика" : "Вы переключились в режим подрядчика");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
 
   const save = async () => {
     try {
@@ -343,6 +359,45 @@ export function ProfilePage({ user, onUpdate }: { user: User; onUpdate: (u: User
             )}
           </div>
         </div>
+
+        {user.role !== "admin" && (
+          <div className="bg-background border border-border rounded-xl p-4 mb-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-[180px]">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Режим работы</div>
+                <p className="text-xs text-muted-foreground">Переключайтесь между ролями — вы можете и размещать лоты, и брать заказы</p>
+              </div>
+              <div className="flex bg-muted rounded-lg p-1 gap-1">
+                <button
+                  type="button"
+                  disabled={switchingRole || user.role === "customer"}
+                  onClick={() => switchRole("customer")}
+                  className={`text-xs font-semibold px-4 py-2 rounded-md transition-all flex items-center gap-1.5 ${
+                    user.role === "customer"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  }`}
+                >
+                  <Icon name="Briefcase" size={13} />
+                  Заказчик
+                </button>
+                <button
+                  type="button"
+                  disabled={switchingRole || user.role === "contractor"}
+                  onClick={() => switchRole("contractor")}
+                  className={`text-xs font-semibold px-4 py-2 rounded-md transition-all flex items-center gap-1.5 ${
+                    user.role === "contractor"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  }`}
+                >
+                  <Icon name="HardHat" size={13} />
+                  Подрядчик
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-background border border-border rounded-xl p-4 mb-6">
           <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Как зарабатываются баллы</div>

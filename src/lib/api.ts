@@ -38,6 +38,8 @@ export const api = {
     me: () => request(`${AUTH_URL}?action=me`),
     updateProfile: (body: JsonValue) =>
       request(`${AUTH_URL}?action=profile`, { method: "PUT", body: JSON.stringify(body) }),
+    switchRole: (role: "customer" | "contractor") =>
+      request(`${AUTH_URL}?action=switch_role`, { method: "POST", body: JSON.stringify({ role }) }),
     logout: () => request(`${AUTH_URL}?action=logout`, { method: "POST" }),
     contractors: (params: Record<string, string | number | undefined> = {}) => {
       const q = new URLSearchParams({ action: "contractors" });

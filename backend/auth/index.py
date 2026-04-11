@@ -262,6 +262,35 @@ def handler(event, context):
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
+    # POST ?action=switch_role (user switches own role between customer/contractor)
+    if method == 'POST' and action == 'switch_role':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        conn = get_db()
+        user = get_user_by_token(token, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Сессия истекла'})}
+
+        if user['role'] == 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Администратор не может сменить роль'})}
+
+        body = json.loads(event.get('body', '{}'))
+        new_role = body.get('role')
+        if new_role not in ('customer', 'contractor'):
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Роль: customer или contractor'})}
+
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET role = '%s', updated_at = NOW() WHERE id = %d" % (new_role, int(user['id'])))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True, 'role': new_role})}
+
     # POST ?action=logout
     if method == 'POST' and action == 'logout':
         auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
