@@ -205,9 +205,9 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
           </div>
 
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-black leading-[1.02] mb-6 tracking-tight max-w-4xl">
-            Выбирай подрядчика<br />
-            по <span className="relative text-primary">
-              честной цене
+            Аукцион подрядных работ.<br />
+            <span className="relative text-primary">
+              Заказчик экономит — подрядчик зарабатывает.
               <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" preserveAspectRatio="none">
                 <path d="M1,8 Q75,2 150,6 T299,5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
               </svg>
