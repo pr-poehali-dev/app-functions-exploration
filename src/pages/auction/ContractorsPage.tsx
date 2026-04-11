@@ -28,8 +28,22 @@ function RatingBadge({ points }: { points: number }) {
   );
 }
 
+interface TopContractor {
+  id: number;
+  full_name: string;
+  company_name?: string;
+  city?: string;
+  rating_points: number;
+  badges: string[];
+  deals_count: number;
+  specializations: string[];
+  work_photos: string[];
+  is_verified: boolean;
+}
+
 export function ContractorsPage({ onOpen }: { onOpen: (id: number) => void }) {
   const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [topContractors, setTopContractors] = useState<TopContractor[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -38,6 +52,13 @@ export function ContractorsPage({ onOpen }: { onOpen: (id: number) => void }) {
   const [sort, setSort] = useState<"rating" | "deals" | "new">("rating");
   const [page, setPage] = useState(1);
   const perPage = 20;
+
+  useEffect(() => {
+    api.social
+      .homeStats()
+      .then((res) => setTopContractors((res as { top_contractors: TopContractor[] }).top_contractors || []))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -77,6 +98,71 @@ export function ContractorsPage({ onOpen }: { onOpen: (id: number) => void }) {
           Проверенные подрядчики с рейтингом и знаками отличия. Всего: {total}
         </p>
       </div>
+
+      {topContractors.length > 0 && (
+        <section className="mb-10">
+          <div className="mb-6">
+            <div className="text-xs text-primary font-medium uppercase tracking-wider mb-1">Рейтинг недели</div>
+            <h2 className="text-xl md:text-2xl font-black flex items-center gap-2">
+              <Icon name="Trophy" size={22} className="text-amber-400" />
+              Лучшие исполнители
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {topContractors.map((c, i) => (
+              <div
+                key={c.id}
+                onClick={() => onOpen(c.id)}
+                className="bg-card border border-border rounded-2xl p-5 hover:border-primary/40 hover:shadow-lg transition-all animate-slide-up relative overflow-hidden cursor-pointer"
+                style={{ animationDelay: `${i * 0.08}s` }}
+              >
+                {i === 0 && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                    ★ ТОП
+                  </div>
+                )}
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center text-primary font-black text-xl flex-shrink-0">
+                    {c.full_name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <div className="font-bold truncate">{c.full_name}</div>
+                      {c.is_verified && <Icon name="BadgeCheck" size={14} className="text-primary shrink-0" />}
+                    </div>
+                    {c.company_name && <div className="text-xs text-muted-foreground truncate">{c.company_name}</div>}
+                    {c.city && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Icon name="MapPin" size={10} />
+                        {c.city}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-1 bg-primary/10 border border-primary/20 rounded-full px-2 py-0.5">
+                    <Icon name="Award" size={11} className="text-primary" />
+                    <span className="text-xs font-bold text-primary">{c.rating_points}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{c.deals_count} сделок</span>
+                </div>
+                {c.specializations.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {c.specializations.slice(0, 2).map((s) => (
+                      <span key={s} className="text-[10px] bg-secondary px-2 py-0.5 rounded-full">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs text-primary font-medium flex items-center gap-1">
+                  Профиль <Icon name="ArrowRight" size={10} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="bg-card border border-border rounded-2xl p-4 mb-6">
         <div className="flex gap-3 items-center flex-wrap">
