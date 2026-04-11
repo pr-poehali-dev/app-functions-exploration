@@ -456,7 +456,7 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
               </div>
 
               {heroHasActiveFilters && (
-                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center justify-center gap-4 md:gap-8 flex-wrap mx-0">
                   <span className="text-xs text-muted-foreground">
                     Активных фильтров: {[heroFilters.search, heroFilters.category_id, heroFilters.city, heroFilters.min_price, heroFilters.max_price].filter(Boolean).length}
                   </span>
@@ -556,8 +556,8 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
                 style={{ animationDelay: `${i * 0.08}s` }}
               >
                 <Icon name={m.icon} size={16} className={m.color} />
-                <span className="text-base font-bold">{m.value}</span>
-                <span className="text-xs text-muted-foreground">{m.label}</span>
+                <span className="font-bold text-2xl">{m.value}</span>
+                <span className="text-muted-foreground text-2xl">{m.label}</span>
               </div>
             ))}
           </div>
