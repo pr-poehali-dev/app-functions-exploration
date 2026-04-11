@@ -486,6 +486,36 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         </div>
       </section>
 
+      {/* How it works */}
+      <section className="px-6 py-12 border-b border-border">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-xs text-primary font-medium uppercase tracking-wider mb-2">Простой процесс</div>
+          <h2 className="text-2xl md:text-3xl font-black mb-8">Как это работает</h2>
+          <div className="grid md:grid-cols-3 gap-4">
+            {[
+              { icon: "FileText", title: "Заказчик размещает лот", text: "Описание работ, бюджет, сроки и срок приёма ставок" },
+              { icon: "TrendingDown", title: "Торги на понижение", text: "Подрядчики делают ставки — побеждает лучшее предложение по цене и репутации" },
+              { icon: "Handshake", title: "Выбор исполнителя", text: "Заказчик видит профили всех участников и сам выбирает подрядчика" },
+            ].map((s, i) => (
+              <div
+                key={i}
+                className="bg-card border border-border rounded-2xl p-6 animate-slide-up relative"
+                style={{ animationDelay: `${i * 0.08}s` }}
+              >
+                <div className="absolute -top-3 -left-3 w-8 h-8 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-black text-sm shadow-lg">
+                  {i + 1}
+                </div>
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 mt-2">
+                  <Icon name={s.icon} size={22} className="text-primary" />
+                </div>
+                <div className="font-bold mb-2 text-lg">{s.title}</div>
+                <div className="text-sm text-muted-foreground leading-relaxed">{s.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Персонализация для залогиненных */}
       {user && myLots.length > 0 && (
         <section className="px-6 py-10 border-b border-border">
@@ -535,36 +565,6 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {lots.map((lot) => (
               <LotCardMini key={lot.id} lot={lot} onClick={() => onOpenLot(lot.id)} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="px-6 py-12 border-b border-border">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-xs text-primary font-medium uppercase tracking-wider mb-2">Простой процесс</div>
-          <h2 className="text-2xl md:text-3xl font-black mb-8">Как это работает</h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            {[
-              { icon: "FileText", title: "Заказчик размещает лот", text: "Описание работ, бюджет, сроки и срок приёма ставок" },
-              { icon: "TrendingDown", title: "Торги на понижение", text: "Подрядчики делают ставки — побеждает лучшее предложение по цене и репутации" },
-              { icon: "Handshake", title: "Выбор исполнителя", text: "Заказчик видит профили всех участников и сам выбирает подрядчика" },
-            ].map((s, i) => (
-              <div
-                key={i}
-                className="bg-card border border-border rounded-2xl p-6 animate-slide-up relative"
-                style={{ animationDelay: `${i * 0.08}s` }}
-              >
-                <div className="absolute -top-3 -left-3 w-8 h-8 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-black text-sm shadow-lg">
-                  {i + 1}
-                </div>
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4 mt-2">
-                  <Icon name={s.icon} size={22} className="text-primary" />
-                </div>
-                <div className="font-bold mb-2 text-lg">{s.title}</div>
-                <div className="text-sm text-muted-foreground leading-relaxed">{s.text}</div>
-              </div>
             ))}
           </div>
         </div>
