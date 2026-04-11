@@ -514,37 +514,6 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         </section>
       )}
 
-      {/* Популярные категории */}
-      {stats && stats.top_categories.length > 0 && (
-        <section className="px-6 py-12 border-b border-border">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-xs text-primary font-medium uppercase tracking-wider mb-2">Направления</div>
-            <h2 className="text-2xl md:text-3xl font-black mb-8">Популярные категории работ</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {stats.top_categories.map((cat, i) => {
-                const icons = ["Hammer", "Wrench", "Zap", "Paintbrush", "Home", "Lightbulb", "HardHat", "Cog"];
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      (window as Window & { __homeCategoryId?: number }).__homeCategoryId = cat.id;
-                      onNavigate("lots");
-                    }}
-                    className="group bg-card border border-border rounded-2xl p-5 text-left hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all"
-                  >
-                    <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-                      <Icon name={icons[i % icons.length]} size={22} className="text-primary" />
-                    </div>
-                    <div className="font-semibold group-hover:text-primary transition-colors">{cat.name}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{cat.lots_count} активных лотов</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Hot lots */}
       <section className="px-6 py-12 border-b border-border">
         <div className="max-w-6xl mx-auto">
