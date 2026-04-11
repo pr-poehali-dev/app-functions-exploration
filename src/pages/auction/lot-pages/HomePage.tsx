@@ -541,29 +541,6 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         </div>
       </section>
 
-      {/* METRICS */}
-      <section className="px-6 py-3 border-y border-border bg-card/30">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center gap-4 md:gap-8 flex-wrap">
-            {[
-              { icon: "Package", value: activeLots.toLocaleString("ru-RU"), label: "Активных лотов", color: "text-primary" },
-              { icon: "HardHat", value: contractorsCount.toLocaleString("ru-RU"), label: "Подрядчиков", color: "text-emerald-400" },
-              { icon: "PiggyBank", value: `${avgSavings}%`, label: "Средняя экономия", color: "text-amber-400" },
-            ].map((m, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 animate-slide-up"
-                style={{ animationDelay: `${i * 0.08}s` }}
-              >
-                <Icon name={m.icon} size={16} className={m.color} />
-                <span className="font-bold text-2xl">{m.value}</span>
-                <span className="text-muted-foreground text-2xl">{m.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* How it works */}
       <section className="px-6 py-12 border-b border-border">
         <div className="max-w-6xl mx-auto">
