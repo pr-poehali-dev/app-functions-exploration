@@ -94,12 +94,11 @@ const Index = () => {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-16">
-          <button onClick={() => setPage("home")} className="flex items-center">
-            <img
-              src="https://cdn.poehali.dev/projects/7b6a137b-add6-4931-a12d-8f298fde2eca/bucket/a2e7eb89-e190-4ece-8d2f-164c39a974fd.png"
-              alt="Tender Pro"
-              className="h-10 w-auto object-contain"
-            />
+          <button onClick={() => setPage("home")} className="flex items-center gap-2.5 font-black text-lg tracking-tight">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Icon name="Gavel" size={16} className="text-primary-foreground" />
+            </div>
+            <span className="hidden sm:inline">Тендер Инфо</span>
           </button>
 
           <nav className="hidden md:flex items-center gap-1">
