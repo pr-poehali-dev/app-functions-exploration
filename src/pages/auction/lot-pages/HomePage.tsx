@@ -208,7 +208,7 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-black leading-[1.05] mb-5 tracking-tight">
-              Аукцион <span className="text-primary">подрядных работ</span>.
+              Аукцион <span className="text-primary">подрядных работ</span>
             </h1>
             <p className="text-xl md:text-2xl font-semibold text-foreground/90 mb-4 leading-snug">
               Заказчик экономит — подрядчик зарабатывает.
