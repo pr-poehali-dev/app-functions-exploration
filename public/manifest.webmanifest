@@ -1,6 +1,6 @@
 {
-  "name": "ПодрядБиржа",
-  "short_name": "ПодрядБиржа",
+  "name": "Тендер Инфо",
+  "short_name": "Тендер Инфо",
   "description": "Аукцион подрядов и исполнителей",
   "start_url": "/",
   "display": "standalone",

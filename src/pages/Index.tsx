@@ -98,7 +98,7 @@ const Index = () => {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Icon name="Gavel" size={16} className="text-primary-foreground" />
             </div>
-            <span className="hidden sm:inline">ПодрядБиржа</span>
+            <span className="hidden sm:inline">Тендер Инфо</span>
           </button>
 
           <nav className="hidden md:flex items-center gap-1">
@@ -234,7 +234,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t border-border mt-16 py-8 px-6">
         <div className="max-w-5xl mx-auto text-center text-xs text-muted-foreground">
-          © 2026 ПодрядБиржа · Электронная торговая площадка ·{" "}
+          © 2026 Тендер Инфо · Электронная торговая площадка ·{" "}
           <button onClick={() => setPage("faq")} className="hover:text-primary transition-colors">FAQ</button> ·{" "}
           <button onClick={() => setPage("contacts")} className="hover:text-primary transition-colors">Контакты</button>
         </div>

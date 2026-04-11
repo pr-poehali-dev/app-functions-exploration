@@ -29,7 +29,7 @@ const ContractorPublicPage = () => {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Icon name="Gavel" size={16} className="text-primary-foreground" />
             </div>
-            <span className="hidden sm:inline">ПодрядБиржа</span>
+            <span className="hidden sm:inline">Тендер Инфо</span>
           </button>
           <button
             onClick={() => navigate("/")}

@@ -734,8 +734,11 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 font-black text-lg mb-3">Тендер Инфо</div>
-                ПодрядБиржа
+              <div className="flex items-center gap-2 font-black text-lg mb-3">
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                  <Icon name="Gavel" size={16} className="text-primary-foreground" />
+                </div>
+                Тендер Инфо
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Обратный аукцион подрядных работ. Честные торги, проверенные исполнители.
@@ -766,7 +769,7 @@ export function HomePage({ onNavigate, user, onOpenLot }: { onNavigate: (p: Page
             </div>
           </div>
           <div className="pt-6 border-t border-border flex items-center justify-between flex-wrap gap-3 text-xs text-muted-foreground">
-            <div>© 2026 ПодрядБиржа. Все права защищены.</div>
+            <div>© 2026 Тендер Инфо. Все права защищены.</div>
             <div>Сделано с ❤ для строителей</div>
           </div>
         </div>
