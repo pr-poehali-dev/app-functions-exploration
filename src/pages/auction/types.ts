@@ -1,5 +1,22 @@
-export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts" | "admin";
+export type Page = "home" | "lots" | "lot_detail" | "my_lots" | "my_bids" | "profile" | "auth" | "faq" | "contacts" | "admin" | "contractors" | "contractor_detail";
 export type Role = "customer" | "contractor" | "admin";
+
+export type Badge = "vip" | "gost";
+
+export const BADGE_INFO: Record<Badge, { label: string; description: string; icon: string; cls: string }> = {
+  vip: {
+    label: "VIP",
+    description: "Исполнитель работает с премиум сегментом",
+    icon: "Crown",
+    cls: "bg-amber-500/15 text-amber-400 border-amber-500/30"
+  },
+  gost: {
+    label: "Русский стандарт",
+    description: "Исполнитель выполняет работы строго по ГОСТу и СНиПам",
+    icon: "ShieldCheck",
+    cls: "bg-blue-500/15 text-blue-400 border-blue-500/30"
+  }
+};
 
 export interface User {
   id: number;
@@ -19,6 +36,30 @@ export interface User {
   experience_years?: number;
   entity_type?: string;
   inn?: string;
+  rating_points?: number;
+  badges?: Badge[];
+  work_photos?: string[];
+}
+
+export interface Contractor {
+  id: number;
+  full_name: string;
+  company_name?: string;
+  city?: string;
+  region?: string;
+  entity_type?: string;
+  avatar_url?: string;
+  about?: string;
+  specializations?: string[];
+  experience_years?: number;
+  rating?: number;
+  reviews_count?: number;
+  deals_count?: number;
+  is_verified?: boolean;
+  rating_points: number;
+  badges: Badge[];
+  work_photos: string[];
+  created_at?: string;
 }
 
 export interface Lot {

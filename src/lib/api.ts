@@ -38,6 +38,18 @@ export const api = {
     updateProfile: (body: JsonValue) =>
       request(`${AUTH_URL}?action=profile`, { method: "PUT", body: JSON.stringify(body) }),
     logout: () => request(`${AUTH_URL}?action=logout`, { method: "POST" }),
+    contractors: (params: Record<string, string | number | undefined> = {}) => {
+      const q = new URLSearchParams({ action: "contractors" });
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== "" && v !== null) q.append(k, String(v));
+      });
+      return request(`${AUTH_URL}?${q.toString()}`);
+    },
+    contractor: (id: number) => request(`${AUTH_URL}?action=contractor&id=${id}`),
+    uploadPhoto: (data: string, ext: string) =>
+      request(`${AUTH_URL}?action=upload_photo`, { method: "POST", body: JSON.stringify({ data, ext }) }),
+    removePhoto: (url: string) =>
+      request(`${AUTH_URL}?action=remove_photo`, { method: "POST", body: JSON.stringify({ url }) }),
   },
   lots: {
     list: (params: Record<string, string | number | undefined> = {}) => {
@@ -101,6 +113,8 @@ export const api = {
       request(`${AUTH_URL}?action=block_user`, { method: "POST", body: JSON.stringify({ user_id, block }) }),
     changeRole: (user_id: number, role: string) =>
       request(`${AUTH_URL}?action=change_role`, { method: "POST", body: JSON.stringify({ user_id, role }) }),
+    awardBadge: (user_id: number, badge: string, grant: boolean) =>
+      request(`${AUTH_URL}?action=award_badge`, { method: "POST", body: JSON.stringify({ user_id, badge, grant }) }),
   },
   notifications: {
     list: () => request(`${NOTIF_URL}?action=list`),

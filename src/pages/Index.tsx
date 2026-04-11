@@ -7,11 +7,13 @@ import { AuthPage, ProfilePage } from "./auction/AuthProfilePages";
 import { HomePage, LotsPage, LotDetailPage, MyLotsPage, MyBidsPage } from "./auction/LotPages";
 import { FAQPage, ContactsPage } from "./auction/StaticPages";
 import { AdminPage } from "./auction/AdminPage";
+import { ContractorsPage, ContractorDetailPage } from "./auction/ContractorsPage";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [page, setPage] = useState<Page>("home");
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
+  const [selectedContractorId, setSelectedContractorId] = useState<number | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -64,9 +66,15 @@ const Index = () => {
     loadNotifications();
   };
 
+  const openContractor = (id: number) => {
+    setSelectedContractorId(id);
+    setPage("contractor_detail");
+  };
+
   const navItems: { id: Page; label: string; icon: string; show: boolean }[] = [
     { id: "home", label: "Главная", icon: "Home", show: true },
     { id: "lots", label: "Лоты", icon: "Briefcase", show: true },
+    { id: "contractors", label: "Исполнители", icon: "HardHat", show: true },
     { id: "my_lots", label: "Мои лоты", icon: "FolderOpen", show: user?.role === "customer" },
     { id: "my_bids", label: "Мои ставки", icon: "Gavel", show: user?.role === "contractor" },
     { id: "profile", label: "Профиль", icon: "User", show: !!user },
@@ -178,6 +186,10 @@ const Index = () => {
         {page === "auth" && <AuthPage onAuth={handleAuth} />}
         {page === "faq" && <FAQPage />}
         {page === "contacts" && <ContactsPage />}
+        {page === "contractors" && <ContractorsPage onOpen={openContractor} />}
+        {page === "contractor_detail" && selectedContractorId && (
+          <ContractorDetailPage contractorId={selectedContractorId} onBack={() => setPage("contractors")} />
+        )}
         {page === "admin" && user?.role === "admin" && <AdminPage onOpenLot={openLot} />}
       </main>
 

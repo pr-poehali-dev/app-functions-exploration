@@ -23,13 +23,48 @@ def cors_headers():
         'Content-Type': 'application/json'
     }
 
+def is_profile_complete(u):
+    required = [u.get('full_name'), u.get('city'), u.get('about'), u.get('phone') or u.get('email')]
+    return all(required) and (u.get('role') != 'contractor' or (u.get('experience_years') and u.get('specializations')))
+
+def recalc_and_apply_bonuses(user_id, conn):
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, role, full_name, city, about, phone, email, experience_years, specializations, "
+        "profile_bonus_awarded, last_monthly_bonus_at, rating_points, badges "
+        "FROM users WHERE id = %d" % int(user_id)
+    )
+    r = cur.fetchone()
+    if not r:
+        return
+    u = {
+        'id': r[0], 'role': r[1], 'full_name': r[2], 'city': r[3], 'about': r[4],
+        'phone': r[5], 'email': r[6], 'experience_years': r[7], 'specializations': r[8],
+    }
+    profile_bonus_awarded = r[9]
+    last_bonus = r[10]
+    delta = 0
+    updates = []
+    if not profile_bonus_awarded and is_profile_complete(u):
+        delta += 100
+        updates.append("profile_bonus_awarded = TRUE")
+    now = datetime.now()
+    if not last_bonus or (now - last_bonus).days >= 30:
+        delta += 100
+        updates.append("last_monthly_bonus_at = NOW()")
+    if delta > 0:
+        updates.append("rating_points = COALESCE(rating_points, 0) + %d" % delta)
+        cur.execute("UPDATE users SET %s WHERE id = %d" % (", ".join(updates), int(user_id)))
+        conn.commit()
+
 def get_user_by_token(token, conn):
     """Получить пользователя по токену сессии"""
     cur = conn.cursor()
     cur.execute(
         "SELECT u.id, u.email, u.phone, u.role, u.full_name, u.company_name, u.city, u.region, "
         "u.entity_type, u.inn, u.avatar_url, u.about, u.specializations, u.experience_years, "
-        "u.rating, u.reviews_count, u.deals_count, u.is_verified, u.is_blocked, u.created_at "
+        "u.rating, u.reviews_count, u.deals_count, u.is_verified, u.is_blocked, u.created_at, "
+        "u.rating_points, u.badges, u.work_photos "
         "FROM sessions s JOIN users u ON s.user_id = u.id "
         "WHERE s.token = '%s' AND s.expires_at > NOW()" % token.replace("'", "''")
     )
@@ -43,7 +78,10 @@ def get_user_by_token(token, conn):
         'specializations': row[12] or [], 'experience_years': row[13],
         'rating': float(row[14]) if row[14] else 0, 'reviews_count': row[15],
         'deals_count': row[16], 'is_verified': row[17], 'is_blocked': row[18],
-        'created_at': row[19].isoformat() if row[19] else None
+        'created_at': row[19].isoformat() if row[19] else None,
+        'rating_points': row[20] or 0,
+        'badges': row[21] or [],
+        'work_photos': row[22] or []
     }
 
 def handler(event, context):
@@ -166,10 +204,13 @@ def handler(event, context):
 
         conn = get_db()
         user = get_user_by_token(token, conn)
-        conn.close()
-
         if not user:
+            conn.close()
             return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Сессия истекла'})}
+
+        recalc_and_apply_bonuses(user['id'], conn)
+        user = get_user_by_token(token, conn)
+        conn.close()
 
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'user': user})}
 
@@ -203,12 +244,18 @@ def handler(event, context):
             specs = ','.join("'%s'" % s.replace("'", "''") for s in body['specializations'])
             updates.append("specializations = ARRAY[%s]" % specs)
 
+        if 'work_photos' in body and isinstance(body['work_photos'], list):
+            photos = body['work_photos'][:5]
+            photos_json = json.dumps(photos).replace("'", "''")
+            updates.append("work_photos = '%s'::jsonb" % photos_json)
+
         if updates:
             updates.append("updated_at = NOW()")
             cur = conn.cursor()
             cur.execute("UPDATE users SET %s WHERE id = %d" % (', '.join(updates), user['id']))
             conn.commit()
 
+        recalc_and_apply_bonuses(user['id'], conn)
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
@@ -262,7 +309,7 @@ def handler(event, context):
         cur.execute(
             "SELECT id, email, phone, role, full_name, company_name, city, region, "
             "entity_type, inn, is_verified, is_blocked, created_at, "
-            "rating, reviews_count, deals_count, experience_years "
+            "rating, reviews_count, deals_count, experience_years, rating_points, badges "
             "FROM users" + where_str + " ORDER BY created_at DESC LIMIT %d OFFSET %d" % (per_page, offset)
         )
         users = []
@@ -273,7 +320,8 @@ def handler(event, context):
                 'entity_type': r[8], 'inn': r[9], 'is_verified': r[10], 'is_blocked': r[11],
                 'created_at': r[12].isoformat() if r[12] else None,
                 'rating': float(r[13]) if r[13] else 0, 'reviews_count': r[14],
-                'deals_count': r[15], 'experience_years': r[16]
+                'deals_count': r[15], 'experience_years': r[16],
+                'rating_points': r[17] or 0, 'badges': r[18] or []
             })
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
@@ -338,4 +386,220 @@ def handler(event, context):
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
 
-    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action: register, login, me, profile, logout, admin_users, block_user, change_role'})}
+    # GET ?action=contractors - public list of contractors
+    if method == 'GET' and action == 'contractors':
+        conn = get_db()
+        cur = conn.cursor()
+
+        where = ["role = 'contractor'", "is_blocked = FALSE"]
+        search = params.get('search', '').strip()
+        if search:
+            s = search.replace("'", "''")
+            where.append("(full_name ILIKE '%%%s%%' OR company_name ILIKE '%%%s%%' OR city ILIKE '%%%s%%')" % (s, s, s))
+        city = params.get('city', '').strip()
+        if city:
+            where.append("city ILIKE '%s'" % city.replace("'", "''"))
+        badge = params.get('badge', '').strip()
+        if badge:
+            where.append("badges @> '[\"%s\"]'::jsonb" % badge.replace("'", "''"))
+
+        where_str = " WHERE " + " AND ".join(where)
+
+        cur.execute("SELECT COUNT(*) FROM users" + where_str)
+        total = cur.fetchone()[0]
+
+        page_num = max(1, int(params.get('page', 1)))
+        per_page = min(50, int(params.get('per_page', 20)))
+        offset = (page_num - 1) * per_page
+
+        sort = params.get('sort', 'rating')
+        order_by = "rating_points DESC NULLS LAST"
+        if sort == 'deals':
+            order_by = "deals_count DESC NULLS LAST"
+        elif sort == 'new':
+            order_by = "created_at DESC"
+
+        cur.execute(
+            "SELECT id, full_name, company_name, city, region, entity_type, avatar_url, "
+            "about, specializations, experience_years, rating, reviews_count, deals_count, "
+            "is_verified, rating_points, badges, work_photos, created_at "
+            "FROM users" + where_str + " ORDER BY " + order_by + " LIMIT %d OFFSET %d" % (per_page, offset)
+        )
+        contractors = []
+        for r in cur.fetchall():
+            contractors.append({
+                'id': r[0], 'full_name': r[1], 'company_name': r[2],
+                'city': r[3], 'region': r[4], 'entity_type': r[5],
+                'avatar_url': r[6], 'about': r[7],
+                'specializations': r[8] or [], 'experience_years': r[9],
+                'rating': float(r[10]) if r[10] else 0, 'reviews_count': r[11],
+                'deals_count': r[12], 'is_verified': r[13],
+                'rating_points': r[14] or 0, 'badges': r[15] or [],
+                'work_photos': r[16] or [],
+                'created_at': r[17].isoformat() if r[17] else None
+            })
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+            'contractors': contractors, 'total': total, 'page': page_num, 'per_page': per_page
+        })}
+
+    # GET ?action=contractor&id=X - public single contractor
+    if method == 'GET' and action == 'contractor':
+        contractor_id = params.get('id')
+        if not contractor_id:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите id'})}
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, full_name, company_name, city, region, entity_type, avatar_url, "
+            "about, specializations, experience_years, rating, reviews_count, deals_count, "
+            "is_verified, rating_points, badges, work_photos, created_at, role, is_blocked "
+            "FROM users WHERE id = %d" % int(contractor_id)
+        )
+        r = cur.fetchone()
+        conn.close()
+        if not r or r[18] != 'contractor' or r[19]:
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Исполнитель не найден'})}
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contractor': {
+            'id': r[0], 'full_name': r[1], 'company_name': r[2],
+            'city': r[3], 'region': r[4], 'entity_type': r[5],
+            'avatar_url': r[6], 'about': r[7],
+            'specializations': r[8] or [], 'experience_years': r[9],
+            'rating': float(r[10]) if r[10] else 0, 'reviews_count': r[11],
+            'deals_count': r[12], 'is_verified': r[13],
+            'rating_points': r[14] or 0, 'badges': r[15] or [],
+            'work_photos': r[16] or [],
+            'created_at': r[17].isoformat() if r[17] else None
+        }})}
+
+    # POST ?action=award_badge - admin grants/removes a badge
+    if method == 'POST' and action == 'award_badge':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        admin = get_user_by_token(token, conn)
+        if not admin or admin['role'] != 'admin':
+            conn.close()
+            return {'statusCode': 403, 'headers': headers, 'body': json.dumps({'error': 'Нет прав'})}
+
+        body = json.loads(event.get('body', '{}'))
+        user_id = body.get('user_id')
+        badge = body.get('badge', '').strip()
+        grant = body.get('grant', True)
+        if not user_id or badge not in ('vip', 'gost'):
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите user_id и badge (vip|gost)'})}
+
+        cur = conn.cursor()
+        cur.execute("SELECT badges FROM users WHERE id = %d" % int(user_id))
+        r = cur.fetchone()
+        if not r:
+            conn.close()
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Пользователь не найден'})}
+        current = r[0] or []
+        has_badge = badge in current
+        if grant and not has_badge:
+            new_badges = current + [badge]
+            cur.execute(
+                "UPDATE users SET badges = '%s'::jsonb, rating_points = COALESCE(rating_points, 0) + 500, updated_at = NOW() WHERE id = %d"
+                % (json.dumps(new_badges).replace("'", "''"), int(user_id))
+            )
+            badge_name = 'VIP' if badge == 'vip' else 'Русский стандарт'
+            cur.execute(
+                "INSERT INTO notifications (user_id, type, title, message) "
+                "VALUES (%d, 'badge', 'Получен знак отличия!', 'Вам присвоен знак «%s». Начислено +500 баллов рейтинга')"
+                % (int(user_id), badge_name)
+            )
+            conn.commit()
+        elif not grant and has_badge:
+            new_badges = [b for b in current if b != badge]
+            cur.execute(
+                "UPDATE users SET badges = '%s'::jsonb, rating_points = GREATEST(0, COALESCE(rating_points, 0) - 500), updated_at = NOW() WHERE id = %d"
+                % (json.dumps(new_badges).replace("'", "''"), int(user_id))
+            )
+            conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'ok': True})}
+
+    # POST ?action=upload_photo - upload work photo (base64) to S3
+    if method == 'POST' and action == 'upload_photo':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+
+        conn = get_db()
+        user = get_user_by_token(token, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Сессия истекла'})}
+
+        import base64
+        import boto3
+        body = json.loads(event.get('body', '{}'))
+        data_b64 = body.get('data', '')
+        ext = body.get('ext', 'jpg').lower().replace('.', '')
+        if ext not in ('jpg', 'jpeg', 'png', 'webp'):
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Только jpg, png, webp'})}
+        if ',' in data_b64:
+            data_b64 = data_b64.split(',', 1)[1]
+        try:
+            raw = base64.b64decode(data_b64)
+        except Exception:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Неверный формат изображения'})}
+        if len(raw) > 5 * 1024 * 1024:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Размер файла не более 5 МБ'})}
+
+        current_photos = user.get('work_photos') or []
+        if len(current_photos) >= 5:
+            conn.close()
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Можно загрузить не более 5 фото'})}
+
+        s3 = boto3.client(
+            's3',
+            endpoint_url='https://bucket.poehali.dev',
+            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+        )
+        content_type = 'image/jpeg' if ext in ('jpg', 'jpeg') else ('image/png' if ext == 'png' else 'image/webp')
+        key = 'work_photos/u%d_%s.%s' % (user['id'], secrets.token_urlsafe(12), ext)
+        s3.put_object(Bucket='files', Key=key, Body=raw, ContentType=content_type)
+        cdn_url = 'https://cdn.poehali.dev/projects/%s/bucket/%s' % (os.environ['AWS_ACCESS_KEY_ID'], key)
+
+        new_photos = current_photos + [cdn_url]
+        photos_json = json.dumps(new_photos).replace("'", "''")
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET work_photos = '%s'::jsonb, updated_at = NOW() WHERE id = %d" % (photos_json, user['id']))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'url': cdn_url, 'work_photos': new_photos})}
+
+    # POST ?action=remove_photo - remove a work photo
+    if method == 'POST' and action == 'remove_photo':
+        auth = event.get('headers', {}).get('X-Authorization', event.get('headers', {}).get('x-authorization', ''))
+        token = auth.replace('Bearer ', '') if auth else ''
+        if not token:
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Не авторизован'})}
+        conn = get_db()
+        user = get_user_by_token(token, conn)
+        if not user:
+            conn.close()
+            return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Сессия истекла'})}
+
+        body = json.loads(event.get('body', '{}'))
+        url = body.get('url', '')
+        current_photos = user.get('work_photos') or []
+        new_photos = [p for p in current_photos if p != url]
+        photos_json = json.dumps(new_photos).replace("'", "''")
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET work_photos = '%s'::jsonb, updated_at = NOW() WHERE id = %d" % (photos_json, user['id']))
+        conn.commit()
+        conn.close()
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'work_photos': new_photos})}
+
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите action'})}

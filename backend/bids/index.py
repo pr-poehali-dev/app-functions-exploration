@@ -100,16 +100,28 @@ def handler(event, context):
         is_auto = 'TRUE' if auto_min else 'FALSE'
 
         cur.execute(
+            "SELECT COUNT(*) FROM bids WHERE lot_id = %d AND contractor_id = %d AND is_withdrawn = FALSE"
+            % (int(lot_id), user['id'])
+        )
+        had_bid = cur.fetchone()[0] > 0
+
+        cur.execute(
             "INSERT INTO bids (lot_id, contractor_id, amount, comment, is_auto, auto_min_amount) "
             "VALUES (%d, %d, %s, '%s', %s, %s) RETURNING id"
             % (int(lot_id), user['id'], amount, comment.replace("'", "''"), is_auto, auto_min_val)
         )
         bid_id = cur.fetchone()[0]
 
-        cur.execute(
-            "UPDATE lots SET current_min_bid = %s, bids_count = bids_count + 1, updated_at = NOW() "
-            "WHERE id = %d" % (amount, int(lot_id))
-        )
+        if had_bid:
+            cur.execute(
+                "UPDATE lots SET current_min_bid = %s, updated_at = NOW() "
+                "WHERE id = %d" % (amount, int(lot_id))
+            )
+        else:
+            cur.execute(
+                "UPDATE lots SET current_min_bid = %s, bids_count = bids_count + 1, updated_at = NOW() "
+                "WHERE id = %d" % (amount, int(lot_id))
+            )
 
         auto_ext = lot[7] or 0
         if auto_ext > 0 and lot[4]:
@@ -238,8 +250,14 @@ def handler(event, context):
         )
 
         cur.execute(
+            "UPDATE users SET rating_points = COALESCE(rating_points, 0) + 200, "
+            "deals_count = COALESCE(deals_count, 0) + 1, updated_at = NOW() WHERE id = %d"
+            % int(contractor_id)
+        )
+
+        cur.execute(
             "INSERT INTO notifications (user_id, type, title, message, data) "
-            "VALUES (%d, 'winner', 'Вы выбраны исполнителем!', 'Заказчик выбрал вас для лота «%s»', "
+            "VALUES (%d, 'winner', 'Вы выбраны исполнителем!', 'Заказчик выбрал вас для лота «%s». Начислено +200 баллов рейтинга', "
             "'{\"lot_id\": %d}'::jsonb)"
             % (int(contractor_id), str(lot[2]).replace("'", "''"), int(lot_id))
         )
@@ -364,14 +382,21 @@ def handler(event, context):
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Укажите bid_id'})}
 
         cur = conn.cursor()
-        cur.execute("SELECT lot_id, amount FROM bids WHERE id = %d AND is_withdrawn = FALSE" % int(bid_id))
+        cur.execute("SELECT lot_id, amount, contractor_id FROM bids WHERE id = %d AND is_withdrawn = FALSE" % int(bid_id))
         bid_row = cur.fetchone()
         if not bid_row:
             conn.close()
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Ставка не найдена'})}
 
         cur.execute("UPDATE bids SET is_withdrawn = TRUE WHERE id = %d" % int(bid_id))
-        cur.execute("UPDATE lots SET bids_count = GREATEST(0, bids_count - 1) WHERE id = %d" % bid_row[0])
+
+        cur.execute(
+            "SELECT COUNT(*) FROM bids WHERE lot_id = %d AND contractor_id = %d AND is_withdrawn = FALSE"
+            % (bid_row[0], bid_row[2])
+        )
+        remaining = cur.fetchone()[0]
+        if remaining == 0:
+            cur.execute("UPDATE lots SET bids_count = GREATEST(0, bids_count - 1) WHERE id = %d" % bid_row[0])
 
         cur.execute(
             "SELECT MIN(amount) FROM bids WHERE lot_id = %d AND is_withdrawn = FALSE" % bid_row[0]

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { formatDate } from "../types";
+import { formatDate, Badge, BADGE_INFO } from "../types";
 
 export interface AdminUser {
   id: number;
@@ -16,6 +16,8 @@ export interface AdminUser {
   created_at: string;
   is_blocked?: boolean;
   company_name?: string;
+  rating_points?: number;
+  badges?: Badge[];
 }
 
 export function UsersTab() {
@@ -68,6 +70,17 @@ export function UsersTab() {
     try {
       await api.admin.changeRole(userId, role);
       toast.success("Роль изменена");
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  const toggleBadge = async (userId: number, badge: Badge, currentBadges: Badge[]) => {
+    const has = currentBadges.includes(badge);
+    try {
+      await api.admin.awardBadge(userId, badge, !has);
+      toast.success(has ? "Знак отличия снят" : "Знак отличия присвоен");
       load();
     } catch (err) {
       toast.error((err as Error).message);
@@ -215,7 +228,11 @@ export function UsersTab() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                    {user.rating != null && (
+                    <span className="flex items-center gap-1 text-primary font-semibold">
+                      <Icon name="Award" size={10} />
+                      {user.rating_points || 0} б.
+                    </span>
+                    {user.rating != null && user.rating > 0 && (
                       <span className="flex items-center gap-1">
                         <Icon name="Star" size={10} className="text-amber-400" />
                         {user.rating?.toFixed(1)}
@@ -229,6 +246,27 @@ export function UsersTab() {
                     )}
                     <span>Регистрация: {formatDate(user.created_at)}</span>
                   </div>
+                  {user.role === "contractor" && (
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      {(["vip", "gost"] as Badge[]).map((b) => {
+                        const info = BADGE_INFO[b];
+                        const has = (user.badges || []).includes(b);
+                        return (
+                          <button
+                            key={b}
+                            onClick={() => toggleBadge(user.id, b, user.badges || [])}
+                            title={info.description}
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1 transition-all ${
+                              has ? info.cls : "bg-transparent text-muted-foreground border-border hover:border-primary/40"
+                            }`}
+                          >
+                            <Icon name={has ? info.icon : "Plus"} size={10} />
+                            {info.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <select
