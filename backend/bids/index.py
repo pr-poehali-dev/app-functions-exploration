@@ -164,7 +164,8 @@ def handler(event, context):
             cur.execute(
                 "SELECT b.id, b.contractor_id, b.amount, b.comment, b.created_at, b.is_withdrawn, "
                 "u.full_name, u.company_name, u.rating, u.deals_count, u.is_verified, u.city, "
-                "u.about, u.specializations, u.experience_years, u.entity_type, u.reviews_count "
+                "u.about, u.specializations, u.experience_years, u.entity_type, u.reviews_count, "
+                "u.rating_points, u.badges, u.work_photos "
                 "FROM bids b JOIN users u ON b.contractor_id = u.id "
                 "WHERE b.lot_id = %d AND b.is_withdrawn = FALSE "
                 "ORDER BY b.amount ASC" % int(lot_id)
@@ -179,7 +180,10 @@ def handler(event, context):
                     'is_verified': r[10], 'city': r[11],
                     'about': r[12], 'specializations': r[13] or [],
                     'experience_years': r[14], 'entity_type': r[15],
-                    'reviews_count': r[16]
+                    'reviews_count': r[16],
+                    'rating_points': r[17] or 0,
+                    'badges': r[18] or [],
+                    'work_photos': r[19] or []
                 })
         else:
             cur.execute(

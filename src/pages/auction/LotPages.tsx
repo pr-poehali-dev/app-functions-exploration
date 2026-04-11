@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { User, Lot, Bid, Category, ExtendedBid, Page, formatPrice, formatDate, timeLeft, statusLabel } from "./types";
+import { User, Lot, Bid, Category, ExtendedBid, Page, Badge, BADGE_INFO, formatPrice, formatDate, timeLeft, statusLabel } from "./types";
 import { StatusBadge } from "./AuthProfilePages";
 
 function StarRating({ rating }: { rating: number }) {
@@ -321,12 +321,16 @@ export function ContractorCard({
   selecting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const entityLabel: Record<string, string> = {
     individual: "Физ. лицо",
     self_employed: "Самозанятый",
     ip: "ИП",
     legal: "Юр. лицо",
   };
+  const badges = (bid.badges || []) as Badge[];
+  const photos = bid.work_photos || [];
+  const ratingPoints = bid.rating_points || 0;
 
   return (
     <div
@@ -362,13 +366,34 @@ export function ContractorCard({
               </div>
             )}
             <div className="mt-2 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 bg-primary/10 border border-primary/20 rounded-full px-2 py-0.5">
+                <Icon name="Award" size={11} className="text-primary" />
+                <span className="text-[11px] font-bold text-primary">{ratingPoints}</span>
+              </div>
               {bid.rating !== undefined && bid.rating > 0 && <StarRating rating={bid.rating} />}
               <span className="text-xs text-muted-foreground">{bid.deals_count || 0} сделок</span>
-              <span className="text-xs text-muted-foreground">{bid.reviews_count || 0} отзывов</span>
               {bid.experience_years !== undefined && bid.experience_years > 0 && (
                 <span className="text-xs text-muted-foreground">{bid.experience_years} лет опыта</span>
               )}
             </div>
+            {badges.length > 0 && (
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                {badges.map((b) => {
+                  const info = BADGE_INFO[b];
+                  if (!info) return null;
+                  return (
+                    <span
+                      key={b}
+                      title={info.description}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${info.cls}`}
+                    >
+                      <Icon name={info.icon} size={10} />
+                      {info.label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="text-right flex-shrink-0">
             <div className="text-2xl font-black text-primary">{formatPrice(bid.amount)}</div>
@@ -379,6 +404,30 @@ export function ContractorCard({
           <div className="mt-3 bg-muted/50 rounded-lg p-3">
             <div className="text-[11px] text-muted-foreground mb-1">Комментарий к ставке</div>
             <p className="text-sm">{bid.comment}</p>
+          </div>
+        )}
+
+        {photos.length > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1.5">
+              <Icon name="Images" size={11} />
+              Работы подрядчика ({photos.length})
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {photos.map((url) => (
+                <div
+                  key={url}
+                  onClick={() => setLightbox(url)}
+                  className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-border cursor-pointer hover:border-primary/40 transition-all group"
+                >
+                  <img
+                    src={url}
+                    alt="Работа"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -400,7 +449,11 @@ export function ContractorCard({
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-4 gap-3 text-center">
+              <div className="bg-background rounded-lg p-3 border border-border">
+                <div className="text-lg font-bold text-primary">{ratingPoints}</div>
+                <div className="text-[11px] text-muted-foreground">Баллов</div>
+              </div>
               <div className="bg-background rounded-lg p-3 border border-border">
                 <div className="text-lg font-bold">{bid.deals_count || 0}</div>
                 <div className="text-[11px] text-muted-foreground">Сделок</div>
@@ -414,6 +467,24 @@ export function ContractorCard({
                 <div className="text-[11px] text-muted-foreground">Лет опыта</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {lightbox && (
+          <div
+            onClick={() => setLightbox(null)}
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-6 cursor-zoom-out animate-fade-in"
+          >
+            <img src={lightbox} alt="Работа" className="max-w-full max-h-full rounded-xl" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightbox(null);
+              }}
+              className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white"
+            >
+              <Icon name="X" size={20} />
+            </button>
           </div>
         )}
 

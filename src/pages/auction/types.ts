@@ -126,6 +126,9 @@ export interface ExtendedBid extends Bid {
   experience_years?: number;
   entity_type?: string;
   reviews_count?: number;
+  rating_points?: number;
+  badges?: Badge[];
+  work_photos?: string[];
 }
 
 export const formatPrice = (n?: number) => {
